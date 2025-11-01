@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
@@ -6,6 +7,7 @@ use App\Models\Plan;
 use App\Services\BillingService;
 use App\Services\StripeService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 
 class SubscriptionController extends Controller
 {
@@ -23,9 +25,11 @@ class SubscriptionController extends Controller
     {
         $user         = auth()->user();
         $subscription = $user->subscription;
-        $plans        = Plan::where('active', true)
-                            ->where('is_trial', false)
-                            ->get();
+        // Buscar apenas planos globais (não customizados)
+        $plans = Plan::global()
+            ->where('active', true)
+            ->where('is_trial', false)
+            ->get();
 
         return view('subscription.index', compact('subscription', 'plans'));
     }
@@ -35,7 +39,10 @@ class SubscriptionController extends Controller
     {
         $user                 = auth()->user();
         $currentSubscription  = $user->subscription;
-        $plans                = Plan::where('active', true)->get();
+        // Buscar apenas planos globais (não customizados)
+        $plans = Plan::global()
+            ->where('active', true)
+            ->get();
 
         return view('subscription.plans', compact('plans', 'currentSubscription'));
     }
@@ -81,9 +88,8 @@ class SubscriptionController extends Controller
                 'plan_name' => $plan->name,
                 'success' => true,
             ]);
-
         } catch (\Exception $e) {
-            \Log::error('Error creating Payment Intent', [
+            Log::error('Error creating Payment Intent', [
                 'error' => $e->getMessage(),
                 'user_id' => auth()->id(),
                 'plan_id' => $request->plan_id
@@ -95,50 +101,50 @@ class SubscriptionController extends Controller
             ], 500);
         }
     }
-public function processPayment(Request $request): JsonResponse
-{
-    $request->validate([
-        'payment_intent_id' => 'required|string',
-        'plan_id'           => 'required|exists:plans,id',
-    ]);
+    public function processPayment(Request $request): JsonResponse
+    {
+        $request->validate([
+            'payment_intent_id' => 'required|string',
+            'plan_id'           => 'required|exists:plans,id',
+        ]);
 
-    try {
-        $user          = auth()->user();
-        $plan          = Plan::findOrFail($request->plan_id);
-        $paymentIntent = $this->stripeService->retrievePaymentIntent($request->payment_intent_id);
+        try {
+            $user          = auth()->user();
+            $plan          = Plan::findOrFail($request->plan_id);
+            $paymentIntent = $this->stripeService->retrievePaymentIntent($request->payment_intent_id);
 
-        if ($paymentIntent->status !== 'succeeded') {
+            if ($paymentIntent->status !== 'succeeded') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pagamento não confirmado. Status: ' . $paymentIntent->status
+                ], 400);
+            }
+
+            // --- Include o amount aqui ---
+            $subscription = $this->billingService->createOrUpdateSubscription(
+                $user,
+                $plan,
+                [
+                    'payment_intent_id'  => $request->payment_intent_id,
+                    'payment_method'     => 'stripe',
+                    'status'             => 'active',
+                    'stripe_payment_id'  => $paymentIntent->id,
+                    'amount'             => $plan->price,          // <— ADICIONADO
+                ]
+            );
+
+            return response()->json([
+                'success'      => true,
+                'message'      => 'Pagamento processado com sucesso!',
+                'subscription' => $subscription,
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Pagamento não confirmado. Status: ' . $paymentIntent->status
-            ], 400);
+                'error'   => 'Erro ao processar pagamento: ' . $e->getMessage()
+            ], 500);
         }
-
-        // --- Include o amount aqui ---
-        $subscription = $this->billingService->createOrUpdateSubscription(
-            $user,
-            $plan,
-            [
-                'payment_intent_id'  => $request->payment_intent_id,
-                'payment_method'     => 'stripe',
-                'status'             => 'active',
-                'stripe_payment_id'  => $paymentIntent->id,
-                'amount'             => $plan->price,          // <— ADICIONADO
-            ]
-        );
-
-        return response()->json([
-            'success'      => true,
-            'message'      => 'Pagamento processado com sucesso!',
-            'subscription' => $subscription,
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'error'   => 'Erro ao processar pagamento: ' . $e->getMessage()
-        ], 500);
     }
-}
 
 
     /** API: Confirma um Payment Intent (se necessário) */
@@ -200,13 +206,13 @@ public function processPayment(Request $request): JsonResponse
         return redirect()->route('subscription.checkout', ['plan_id' => $plan->id]);
     }
 
-    public function blocked()
-    {
-        $user = auth()->user();
-        $subscription = $user->subscription;
+    // public function blocked()
+    // {
+    //     $user = auth()->user();
+    //     $subscription = $user->subscription;
 
-        return view('subscription.blocked', compact('subscription'));
-    }
+    //     return view('subscription.blocked', compact('subscription'));
+    // }
 
     public function success()
     {
@@ -221,11 +227,11 @@ public function processPayment(Request $request): JsonResponse
         if ($subscription && $subscription->isActive()) {
             $subscription->update(['status' => 'cancelled']);
             return redirect()->route('subscription.index')
-                           ->with('success', 'Assinatura cancelada com sucesso.');
+                ->with('success', 'Assinatura cancelada com sucesso.');
         }
 
         return redirect()->route('subscription.index')
-                       ->with('error', 'Nenhuma assinatura ativa para cancelar.');
+            ->with('error', 'Nenhuma assinatura ativa para cancelar.');
     }
 
     public function reactivate(Request $request)
@@ -245,8 +251,8 @@ public function processPayment(Request $request): JsonResponse
                 'expires_at' => now()->addMonth(),
             ]);
 
-            return redirect()->route('dashboard')
-                           ->with('success', 'Assinatura reativada com sucesso!');
+            return redirect()->route('dashboard.index')
+                ->with('success', 'Assinatura reativada com sucesso!');
         }
 
         return back()->with('error', 'Não foi possível reativar a assinatura.');

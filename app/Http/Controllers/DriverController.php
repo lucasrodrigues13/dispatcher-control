@@ -5,9 +5,17 @@ namespace App\Http\Controllers;
 use App\Models\Driver;
 use App\Models\User;
 use App\Models\Carrier;
+use App\Models\Dispatcher;
+use App\Repositories\UsageTrackingRepository;
+use App\Services\BillingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Auth\Events\Registered;
+use App\Providers\RouteServiceProvider;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\NewCarrierCredentialsMail;
+use Illuminate\Support\Facades\Auth;
 
 class DriverController extends Controller
 {
@@ -16,7 +24,21 @@ class DriverController extends Controller
      */
     public function index()
     {
-        $drivers = Driver::with(['user', 'carrier'])->paginate(10);
+        // Busca o dispatcher do usuário logado
+        $dispatcher = Dispatcher::where('user_id', Auth::id())->first();
+
+        // Se não existir dispatcher, retorna vazio
+        if (!$dispatcher) {
+            $drivers = collect();
+        } else {
+            // Busca os carriers do dispatcher
+            $carriers = Carrier::where('dispatcher_company_id', $dispatcher->id)->pluck('id');
+
+            // Filtra os drivers pelos carriers do dispatcher
+            $drivers = Driver::with(['user', 'carrier'])
+                ->whereIn('carrier_id', $carriers)
+                ->paginate(10);
+        }
 
         return view('carrier.driver.index', compact('drivers'));
     }
@@ -26,9 +48,23 @@ class DriverController extends Controller
      */
     public function create()
     {
-        $carriers = Carrier::with('user')->get();
+        $billingService = app(BillingService::class);
+        $usageCheck = $billingService->checkUsageLimits(Auth::user(), 'driver');
 
-        return view('carrier.driver.create', compact('carriers'));
+        $showUpgradeModal = !empty($usageCheck['suggest_upgrade']);
+
+        // Busca o dispatcher do usuário logado
+        $dispatcher = Dispatcher::where('user_id', Auth::id())->first();
+
+        // Busca apenas os carriers vinculados ao dispatcher do usuário logado
+        $carriers = [];
+        if ($dispatcher) {
+            $carriers = Carrier::with('user')
+                ->where('dispatcher_company_id', $dispatcher->id)
+                ->get();
+        }
+
+        return view('carrier.driver.create', compact('carriers','showUpgradeModal','usageCheck'));
     }
 
     /**
@@ -40,7 +76,6 @@ class DriverController extends Controller
         $validated = $request->validate([
             'name'         => 'required|string|max:255',
             'email'        => 'required|email|unique:users,email',
-            'password'     => 'required|string|min:8|confirmed',
             'carrier_id'   => 'required|exists:carriers,id',
             'phone'        => 'required|string|max:20',
             'ssn_tax_id'   => 'required|string|max:50',
@@ -48,11 +83,15 @@ class DriverController extends Controller
 
         $validator = Validator::make($request->all(), [
             'email' => 'required|email|unique:users,email',
-            'password' => 'required|min:6',
-            // adicione outras validações se quiser
         ], [
             'email.unique' => 'This email already exists...',
         ]);
+
+        $base = \Illuminate\Support\Str::of($request->input('name'))
+            ->lower()
+            ->ascii()
+            ->replaceMatches('/[^a-z0-9]+/', '');
+        $plainPassword = (string) $base.'2025';
 
         if ($validator->fails()) {
             return redirect()->back()
@@ -64,7 +103,9 @@ class DriverController extends Controller
         $user = User::create([
             'name'     => $validated['name'],
             'email'    => $validated['email'],
-            'password' => Hash::make($validated['password']),
+            'password' => Hash::make($plainPassword),
+            'must_change_password' => true,
+            'email_verified_at' => now(),
         ]);
 
         // Cria o driver
@@ -74,6 +115,16 @@ class DriverController extends Controller
             'ssn_tax_id' => $validated['ssn_tax_id'],
             'user_id'    => $user->id,
         ]);
+
+        app(UsageTrackingRepository::class)->incrementUsage(Auth::user(), 'driver');
+
+        Mail::to($user->email)->queue(new NewCarrierCredentialsMail($user, $plainPassword));
+
+        if ($request->register_type === "auth_register") {
+            event(new Registered($user));
+            Auth::login($user);
+            return redirect(RouteServiceProvider::HOME);
+        }
 
         return redirect()->route('drivers.index')
                          ->with('success', 'Driver criado com sucesso.');

@@ -9,6 +9,7 @@ use App\Models\Load;
 use App\Models\Dispatcher;
 use App\Models\Carrier;
 use App\Models\Container;
+use App\Repositories\UsageTrackingRepository;
 use App\Models\Employeer;
 use App\Services\BillingService;
 use Maatwebsite\Excel\Facades\Excel;
@@ -60,6 +61,9 @@ class LoadImportController extends Controller
 
         \Log::info('Arquivo salvo em: ' . $destination);
 
+        app(UsageTrackingRepository::class)
+            ->incrementUsage(Auth::user(), 'load');
+
         // Importa usando o caminho completo
         Excel::import(new LoadsImport(
             $request->input('carrier_id'),
@@ -88,8 +92,18 @@ class LoadImportController extends Controller
     public function create()
     {
 
-        $dispatchers = Dispatcher::with("user")->get();
-        $carriers = Carrier::with("user")->get();
+        $dispatchers = Dispatcher::with('user')
+            ->where('user_id', auth()->id())
+            ->first();
+
+        if (!$dispatchers) {
+            $carriers = collect();
+        } else {
+            // Filtra os carriers pelo dispatcher_company_id
+            $carriers = Carrier::with(['dispatchers.user', 'user'])
+                ->where('dispatcher_company_id', $dispatchers->id)
+                ->paginate(10);
+        }
         $loads = Load::all();
         return view('load.create', compact('loads', 'dispatchers', 'carriers')); // resources/views/loads/index.blade.php
     }
@@ -243,8 +257,18 @@ class LoadImportController extends Controller
 
     public function edit($id)
     {
-        $dispatchers = Dispatcher::with("user")->get();
-        $carriers = Carrier::with("user")->get();
+        $dispatchers = Dispatcher::with('user')
+            ->where('user_id', auth()->id())
+            ->first();
+
+        if (!$dispatchers) {
+            $carriers = collect();
+        } else {
+            // Filtra os carriers pelo dispatcher_company_id
+            $carriers = Carrier::with(['dispatchers.user', 'user'])
+                ->where('dispatcher_company_id', $dispatchers->id)
+                ->paginate(10);
+        }
         $load = Load::findOrFail($id);
         return view('load.edit', compact('load', 'dispatchers', 'carriers'));
     }
@@ -387,9 +411,27 @@ class LoadImportController extends Controller
     public function index()
     {
 
-        $dispatchers = Dispatcher::with("user")->get();
-        $carriers = Carrier::with("user")->get();
-        $employees = Employeer::with("user")->get();
+        $dispatchers = Dispatcher::with('user')
+            ->where('user_id', auth()->id())
+            ->first();
+
+        if (!$dispatchers) {
+            $carriers = collect();
+        } else {
+            // Filtra os carriers pelo dispatcher_company_id
+            $carriers = Carrier::with(['dispatchers.user', 'user'])
+                ->where('dispatcher_company_id', $dispatchers->id)
+                ->paginate(10);
+        }
+
+        if (!$dispatchers) {
+            $employees = collect();
+        } else {
+            // Somente employees vinculados ao dispatcher logado
+            $employees = Employeer::with('user', 'dispatcher.user')
+                ->where('dispatcher_id', $dispatchers->id)
+                ->get(); // <- coleção (NÃO paginate) para popular os selects
+        }
 
         //$userId = Auth::id(); // ou Auth::user()->id
 
@@ -457,9 +499,27 @@ class LoadImportController extends Controller
             $query->where('driver', 'like', '%' . $request->driver . '%');
         }
 
-        $dispatchers = Dispatcher::with("user")->get();
-        $carriers = Carrier::with("user")->get();
-        $employees = Employeer::with("user")->get();
+        $dispatchers = Dispatcher::with('user')
+            ->where('user_id', auth()->id())
+            ->first();
+
+        if (!$dispatchers) {
+            $carriers = collect();
+        } else {
+            // Filtra os carriers pelo dispatcher_company_id
+            $carriers = Carrier::with(['dispatchers.user', 'user'])
+                ->where('dispatcher_company_id', $dispatchers->id)
+                ->paginate(10);
+        }
+
+        if (!$dispatchers) {
+            $employees = collect();
+        } else {
+            // Somente employees vinculados ao dispatcher logado
+            $employees = Employeer::with('user', 'dispatcher.user')
+                ->where('dispatcher_id', $dispatchers->id)
+                ->get(); // <- coleção (NÃO paginate) para popular os selects
+        }
 
         //$userId = Auth::id(); // ou Auth::user()->id
 
@@ -498,8 +558,18 @@ class LoadImportController extends Controller
         // }
 
         $loads = $query->orderBy('created_at', 'desc')->paginate(50);
-        $dispatchers = Dispatcher::with("user")->get();
-        $carriers = Carrier::with("user")->get();
+        $dispatchers = Dispatcher::with('user')
+            ->where('user_id', auth()->id())
+            ->first();
+
+        if (!$dispatchers) {
+            $carriers = collect();
+        } else {
+            // Filtra os carriers pelo dispatcher_company_id
+            $carriers = Carrier::with(['dispatchers.user', 'user'])
+                ->where('dispatcher_company_id', $dispatchers->id)
+                ->paginate(10);
+        }
 
         return view('load.search', compact('loads', 'dispatchers', 'carriers'));
     }

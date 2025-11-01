@@ -575,7 +575,7 @@
                       </li>
                       <li>
                         <div class="dropdown-divider"></div>
-                        <a class="dropdown-item" href="#">My Profile</a>
+                        <a class="dropdown-item" href="{{ route('profile') }}">My Profile</a>
                         <a class="dropdown-item" href="#" id="logout-link">Logout</a>
                         <!--
                         <a class="dropdown-item" href="#">My Balance</a>
@@ -603,7 +603,7 @@
 
         @yield("conteudo")
 
-        <footer class="footer">
+        <!-- <footer class="footer">
           <div class="container-fluid d-flex justify-content-between">
             <nav class="pull-left">
               <ul class="nav">
@@ -630,7 +630,7 @@
             </div>
           </div>
         </footer>
-      </div>
+      </div> -->
 
 
     </div>

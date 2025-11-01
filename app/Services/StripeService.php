@@ -8,11 +8,32 @@ use Stripe\StripeClient;
 
 class StripeService
 {
-    private StripeClient $stripe;
+    private ?StripeClient $stripe = null;
 
     public function __construct()
     {
-        $this->stripe = new StripeClient(config('services.stripe.secret'));
+        // Lazy initialization - só cria o StripeClient quando necessário
+        // Isso evita erro quando STRIPE_SECRET não está configurado
+    }
+
+    /**
+     * Get or initialize Stripe client
+     */
+    private function getStripeClient(): StripeClient
+    {
+        if ($this->stripe === null) {
+            $secret = config('services.stripe.secret');
+            
+            if (empty($secret)) {
+                throw new \RuntimeException(
+                    'Stripe secret key não configurada. Por favor, defina STRIPE_SECRET no arquivo .env'
+                );
+            }
+            
+            $this->stripe = new StripeClient($secret);
+        }
+        
+        return $this->stripe;
     }
 
     /**
@@ -35,7 +56,7 @@ class StripeService
             $params['metadata'] = $metadata;
         }
 
-        return $this->stripe->paymentIntents->create($params);
+        return $this->getStripeClient()->paymentIntents->create($params);
     }
 
     /**
@@ -43,7 +64,7 @@ class StripeService
      */
     public function retrievePaymentIntent(string $paymentIntentId)
     {
-        return $this->stripe->paymentIntents->retrieve($paymentIntentId);
+        return $this->getStripeClient()->paymentIntents->retrieve($paymentIntentId);
     }
 
     /**
@@ -51,7 +72,7 @@ class StripeService
      */
     public function confirmPaymentIntent(string $paymentIntentId)
     {
-        return $this->stripe->paymentIntents->confirm($paymentIntentId);
+        return $this->getStripeClient()->paymentIntents->confirm($paymentIntentId);
     }
 
     /**
@@ -63,7 +84,7 @@ class StripeService
         if ($amount) {
             $params['amount'] = $amount;
         }
-        return $this->stripe->refunds->create($params);
+        return $this->getStripeClient()->refunds->create($params);
     }
 
     /**
@@ -71,7 +92,7 @@ class StripeService
      */
     public function createCustomer(array $customerData)
     {
-        return $this->stripe->customers->create($customerData);
+        return $this->getStripeClient()->customers->create($customerData);
     }
 
     /**
@@ -79,7 +100,7 @@ class StripeService
      */
     public function updateCustomer(string $customerId, array $customerData)
     {
-        return $this->stripe->customers->update($customerId, $customerData);
+        return $this->getStripeClient()->customers->update($customerId, $customerData);
     }
 
     /**
@@ -87,6 +108,6 @@ class StripeService
      */
     public function retrieveCustomer(string $customerId)
     {
-        return $this->stripe->customers->retrieve($customerId);
+        return $this->getStripeClient()->customers->retrieve($customerId);
     }
 }

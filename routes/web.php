@@ -29,6 +29,14 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\ViewController;
 use App\Http\Controllers\WebhookController;
+use Illuminate\Http\Request;
+use App\Http\Controllers\Auth\EmailVerificationNotificationController;
+use App\Http\Controllers\Auth\EmailVerificationPromptController;
+use App\Http\Controllers\Auth\VerifyEmailController;
+use App\Http\Controllers\Auth\ConfirmablePasswordController;
+use App\Http\Controllers\Auth\PasswordController;
+use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use Illuminate\Foundation\Auth\EmailVerificationRequest;
 
 Route::post('/logout', function () {
     Auth::logout();
@@ -39,8 +47,14 @@ Route::post('/logout', function () {
 
 
 
+
+
 Route::get('/', [LoginPageController::class, 'showLoginForm'])->name('login.form');
 
+Route::get('/email-exists', function (Illuminate\Http\Request $request) {
+    $exists = \App\Models\User::where('email', $request->query('email'))->exists();
+    return response()->json(['exists' => $exists]);
+})->name('api.email.exists');
 
 
 Route::middleware('auth')->group(function () {
@@ -62,6 +76,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::post('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password.update');
+
+    Route::get('/profile', function () {
+    return view('profile', ['user' => auth()->user()]);
+    })->name('profile');
 
     // Rota de logout explícita (opcional)
     Route::post('/logout', function () {
@@ -70,13 +89,10 @@ Route::middleware('auth')->group(function () {
     })->name('logout');
 });
 
-Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard.index');
+// Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard.index');
 
 // Routas
-Route::get('/dashboard', function () {
-    return view('dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
-
+Route::middleware(['auth', 'verified'])->get('/dashboard', [DashboardController::class, 'index'])->name('dashboard.index');
 
 Route::get('/commissions', [ComissionController::class, 'index'])->name('commissions.index');
 Route::get('/commissions/add', [ComissionController::class, 'create'])->name('commissions.create');
@@ -110,8 +126,32 @@ Route::middleware('auth')->group(function () {
     Route::post('/salvar_permissions_roles', [adminController::class, 'salvar_permissions_roles'])->name('salvar_permissions_roles');
 });
 
+// Rotas de autenticação (ajuste para seu guard se necessário)
+Route::middleware('auth')->group(function () {
+    Route::get('verify-email', [EmailVerificationPromptController::class])
+    ->name('verification.notice');
 
+    Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
+        $request->fulfill();
+        return redirect()->intended('/');
+    })->middleware(['signed','throttle:6,1'])->name('verification.verify');
 
+    Route::post('/email/verification-notification', function (Request $request) {
+        if ($request->user()->hasVerifiedEmail()) return back();
+        $request->user()->sendEmailVerificationNotification();
+        return back()->with('resent', true);
+    })->middleware(['throttle:6,1'])->name('verification.send');
+
+    Route::get('confirm-password', [ConfirmablePasswordController::class, 'show'])
+        ->name('password.confirm');
+
+    Route::post('confirm-password', [ConfirmablePasswordController::class, 'store']);
+
+    Route::put('password', [PasswordController::class, 'update'])->name('password.update');
+
+    Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
+        ->name('logout');
+});
 
 // routes/web.php
 
@@ -128,12 +168,13 @@ Route::middleware(['auth'])->group(function () {
 
     // Billing routes
     Route::get('/billing', [BillingController::class, 'index'])->name('billing.index');
-    Route::get('/billing/usage', [BillingController::class, 'usage'])->name('billing.usage');
+    // Route::get('/billing/usage', [BillingController::class, 'usage'])->name('billing.usage');
     Route::post('/billing/update-payment-method', [BillingController::class, 'updatePaymentMethod'])->name('billing.update-payment-method');
 });
 
 
     Route::post('/dispatchers', [DispatcherController::class, 'store'])->name('dispatchers.store');
+    Route::post('/dispatchers/dashboard', [DispatcherController::class, 'storeFromDashboard'])->name('dispatchers.store.dashboard');
     Route::post('/employees', [EmployeerController::class, 'store'])->name('employees.store');
     Route::post('/carriers', [CarrierController::class, 'store'])->name('carriers.store');
     Route::post('/drivers', [DriverController::class, 'store'])->name('drivers.store');
@@ -143,7 +184,7 @@ Route::middleware(['auth'])->group(function () {
 // Rotas protegidas por assinatura
 Route::middleware(['auth', 'check.subscription'])->group(function () {
     Route::get('/dispatchers', [DispatcherController::class, 'index'])->name('dispatchers.index');
-    Route::get('/dispatchers/add', [DispatcherController::class, 'create'])->name('dispatchers.create');
+    Route::get('/dispatchers/add', [DispatcherController::class, 'create'])->name('dispatchers.create') ;
     Route::get('/dispatchers/{id}', [DispatcherController::class, 'show'])->name('dispatchers.show');
     Route::get('/dispatchers/{id}/edit', [DispatcherController::class, 'edit'])->name('dispatchers.edit');
     Route::put('/dispatchers/{id}', [DispatcherController::class, 'update'])->name('dispatchers.update');

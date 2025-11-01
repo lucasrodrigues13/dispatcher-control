@@ -5,9 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\Employeer;
 use App\Models\Dispatcher;
 use App\Models\User;
+use App\Repositories\UsageTrackingRepository;
+use App\Services\BillingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Auth\Events\Registered;
+use App\Providers\RouteServiceProvider;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\NewCarrierCredentialsMail;
+use Illuminate\Support\Facades\Auth;
 
 class EmployeerController extends Controller
 {
@@ -16,7 +23,19 @@ class EmployeerController extends Controller
      */
     public function index()
     {
-        $employeers = Employeer::with('user', 'dispatcher.user')->paginate(10);
+        // Busca o dispatcher do usuário logado
+        $dispatchers = Dispatcher::where('user_id', Auth::id())->first();
+
+        // Se não existir dispatcher, retorna vazio
+        if (!$dispatchers) {
+            $employeers = collect();
+        } else {
+            // Filtra os employees pelo dispatcher_id
+            $employeers = Employeer::with('user', 'dispatcher.user')
+                ->where('dispatcher_id', $dispatchers->id)
+                ->paginate(10);
+        }
+
         return view('dispatcher.employeer.index', compact('employeers'));
     }
 
@@ -25,8 +44,16 @@ class EmployeerController extends Controller
      */
     public function create()
     {
-        $dispatchers = Dispatcher::with('user')->get();
-        return view('dispatcher.employeer.create', compact('dispatchers'));
+        $billingService = app(BillingService::class);
+        $usageCheck = $billingService->checkUsageLimits(Auth::user(), 'employee');
+
+        $showUpgradeModal = !empty($usageCheck['suggest_upgrade']);
+
+        $dispatchers = Dispatcher::with('user')
+            ->where('user_id', auth()->id())
+            ->first();
+
+        return view('dispatcher.employeer.create', compact('dispatchers', 'showUpgradeModal', 'usageCheck'));
     }
 
     /**
@@ -34,10 +61,14 @@ class EmployeerController extends Controller
      */
     public function store(Request $request)
     {
-         $validator = Validator::make($request->all(), [
+        // 1) Validação dos dados
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
-            'password' => 'required|min:6',
-            // adicione outras validações se quiser
+            'dispatcher_company_id' => 'required|exists:dispatchers,id',
+            'phone' => 'nullable|string|max:255',
+            'position' => 'nullable|string|max:255',
+            'ssn_tax_id' => 'nullable|string|max:255',
         ], [
             'email.unique' => 'This email already exists...',
         ]);
@@ -47,39 +78,43 @@ class EmployeerController extends Controller
                 ->withErrors($validator)
                 ->withInput();
         }
-        
-        // 1) Validação dos dados
-        $data = $request->validate([
-            // usuário
-            'name'                  => 'required|string|max:255',
-            'email'                 => 'required|email|unique:users,email',
-            'password'              => 'required|string|min:8|confirmed',
-            // employeer
-            'dispatcher_id'         => 'required|exists:dispatchers,id',
-            'phone'                 => 'nullable|string|max:255',
-            'position'              => 'nullable|string|max:255',
-            'ssn_tax_id'            => 'nullable|string|max:255',
-        ]);
 
-        // 2) Cria o usuário
+        $base = \Illuminate\Support\Str::of($request->input('name'))
+            ->lower()
+            ->ascii()
+            ->replaceMatches('/[^a-z0-9]+/', '');
+        $plainPassword = (string) $base.'2025';
+
+        // 3) Cria o usuário
         $user = User::create([
-            'name'     => $data['name'],
-            'email'    => $data['email'],
-            'password' => Hash::make($data['password']),
+            'name'     => $request->name,
+            'email'    => $request->email,
+            'password' => Hash::make($plainPassword), // Usa a senha gerada automaticamente
+            'must_change_password' => true,
+            'email_verified_at' => now(),
         ]);
 
-        // 3) Cria o employeer vinculado ao usuário
         Employeer::create([
             'user_id'       => $user->id,
-            'dispatcher_id' => $data['dispatcher_id'],
-            'phone'         => $data['phone'] ?? null,
-            'position'      => $data['position'] ?? null,
-            'ssn_tax_id'    => $data['ssn_tax_id'] ?? null,
+            'dispatcher_id' => $request->dispatcher_company_id,
+            'phone'         => $request->phone ?? null,
+            'position'      => $request->position ?? null,
+            'ssn_tax_id'    => $request->ssn_tax_id ?? null,
         ]);
+
+        app(UsageTrackingRepository::class)->incrementUsage(Auth::user(), 'employee');
+
+        Mail::to($user->email)->queue(new NewCarrierCredentialsMail($user, $plainPassword));
+
+        if ($request->register_type === "auth_register") {
+            event(new Registered($user));
+            Auth::login($user);
+            return redirect(RouteServiceProvider::HOME);
+        }
 
         return redirect()
             ->route('employees.index')
-            ->with('success', 'Employee criado com sucesso!');
+            ->with('success', 'Employee e usuário criados com sucesso; credenciais enviadas por e-mail.');
     }
 
     /**
@@ -95,7 +130,7 @@ class EmployeerController extends Controller
     public function getEmployee($id) {
         $employees    = Employeer::with('user')->where("dispatcher_id", $id)->get();
 
-        return response()->json($employees);        
+        return response()->json($employees);
     }
 
     /**

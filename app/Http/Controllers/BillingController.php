@@ -42,12 +42,14 @@ class BillingController extends Controller
         return back()->with('error', 'No subscription found.');
     }
 
+    // Desativado por enquanto
     public function usage()
     {
         $user = auth()->user();
         $subscription = $user->subscription;
-        $usageCheck = $this->billingService->checkUsageLimits($user);
-        $currentUsage = $this->billingService->getCurrentUsage($user);
+        // $resourceType = 'carrier'; // ou 'employee', 'driver', etc.
+        // $usageCheck = $this->billingService->checkUsageLimits($user, 'carrier');
+        $currentUsage = $this->billingService->getUsageStats($user);
 
         return view('billing.usage', compact('subscription', 'usageCheck', 'currentUsage'));
     }

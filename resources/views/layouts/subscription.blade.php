@@ -94,7 +94,7 @@
     <!-- Navigation (Simple) -->
     <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
         <div class="container">
-            <a class="navbar-brand fw-bold" href="{{ route('dashboard') }}">
+            <a class="navbar-brand fw-bold" href="{{ route('dashboard.index') }}">
                 <i class="fas fa-truck-loading text-primary me-2"></i>
                 {{ config('app.name', 'Laravel') }}
             </a>
@@ -107,7 +107,7 @@
                             {{ Auth::user()->name }}
                         </a>
                         <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{{ route('dashboard') }}">
+                            <li><a class="dropdown-item" href="{{ route('dashboard.index') }}">
                                 <i class="fas fa-tachometer-alt me-2"></i>Dashboard
                             </a></li>
                             <li><a class="dropdown-item" href="{{ route('subscription.index') }}">

@@ -15,12 +15,36 @@
     />
 
     <style>
-      .btn-add-new {
-        position: fixed; right: 20px !important; bottom: 30px;
-        z-index: 99;
-      }
+        .btn-add-new {
+            position: fixed; right: 20px !important; bottom: 30px;
+            z-index: 99;
+        }
 
+        .top-alert {
+            position: relative;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1050;
+        }
 
+        .top-alert .alert {
+            border-radius: 0;
+            margin-bottom: 0;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .table>tbody>tr>td, .table>tbody>tr>th {
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+        }
+        .big-exclamation {
+            font-size: 20px;
+            font-weight: bold;
+            vertical-align: middle;
+            margin-left: 3px;
+        }
     </style>
 
     <!-- Fonts and icons -->
@@ -53,9 +77,18 @@
   </head>
   <body>
     <div class="wrapper">
+      <!-- Warning Alert at the top -->
+      @if(session('warning'))
+        <div class="top-alert">
+          <div class="alert alert-warning alert-dismissible fade show text-center mb-0" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            {{ session('warning') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        </div>
+      @endif
 
-
-        @include('layouts.sidebar')
+      @include('layouts.sidebar')
 
       <div class="main-panel">
         <div class="main-header">
@@ -302,24 +335,30 @@
                   </ul>
                 </li>
                 <li class="nav-item topbar-user dropdown hidden-caret">
-                  <a
-                    class="dropdown-toggle profile-pic"
-                    data-bs-toggle="dropdown"
-                    href="#"
-                    aria-expanded="false"
-                  >
-                    <div class="avatar-sm">
-                      <img
-                        src="/assets/assets/img/profile.jpg"
-                        alt="..."
-                        class="avatar-img rounded-circle"
-                      />
-                    </div>
-                    <span class="profile-username">
-                      <span class="op-7">{{ auth()->user()->name }}</span>
-                      <!-- <span class="fw-bold">Hizrian</span> -->
-                    </span>
-                  </a>
+                    <a
+                        class="dropdown-toggle profile-pic d-flex align-items-center"
+                        data-bs-toggle="dropdown"
+                        href="#"
+                        aria-expanded="false"
+                    >
+                        <div class="avatar-sm position-relative">
+                            <img
+                                src="/assets/assets/img/profile.jpg"
+                                alt="..."
+                                class="avatar-img rounded-circle"
+                            />
+
+                            @if(session('warning'))
+                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                                    !
+                                </span>
+                            @endif
+                        </div>
+
+                        <span class="profile-username ms-2">
+                            <span class="op-7">{{ auth()->user()->name }}</span>
+                        </span>
+                    </a>
                   <ul class="dropdown-menu dropdown-user animated fadeIn">
                     <div class="dropdown-user-scroll scrollbar-outer">
                       <li>
@@ -338,8 +377,13 @@
                         </div>
                       </li>
                       <li>
-                        <div class="dropdown-divider"></div>
-                        <a class="dropdown-item" href="#">My Profile</a>
+                        @if(session('warning'))
+                            <a class="dropdown-item" href="{{ route('profile') }}">
+                                My Profile <span class="text-danger big-exclamation">!</span>
+                            </a>
+                        @else
+                            <a class="dropdown-item" href="{{ route('profile') }}">My Profile</a>
+                        @endif
                         <a class="dropdown-item" href="#" id="logout-link">Logout</a>
                         <!--
                         <a class="dropdown-item" href="#">My Balance</a>
@@ -358,15 +402,9 @@
           <!-- End Navbar -->
         </div>
 
-        <style>
-          .table>tbody>tr>td, .table>tbody>tr>th {
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
-          }
-        </style>
         @yield('conteudo')
 
-        <footer class="footer">
+        <!-- <footer class="footer">
           <div class="container-fluid d-flex justify-content-between">
             <nav class="pull-left">
               <ul class="nav">
@@ -393,8 +431,7 @@
             </div>
           </div>
         </footer>
-      </div>
-
+      </div> -->
 
     </div>
     <!--   Core JS Files   -->
@@ -456,47 +493,45 @@
       });
     </script>
 
-   <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        document.getElementById('logout-link')?.addEventListener('click', function (e) {
-            e.preventDefault();
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+          document.getElementById('logout-link')?.addEventListener('click', function (e) {
+              e.preventDefault();
 
-            if (!confirm('Do you really want to logout?')) return;
+              if (!confirm('Do you really want to logout?')) return;
 
-            fetch('{{ route('logout') }}', {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => {
-                if (response.ok) {
-                    window.location.href = '/login1';
-                } else {
-                    return response.json().then(data => {
-                        alert(data.message || 'Logout failed.');
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Logout error:', error);
-                alert('Something went wrong.');
-            });
-        });
-    });
+              fetch('{{ route('logout') }}', {
+                  method: 'POST',
+                  headers: {
+                      'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                      'Accept': 'application/json',
+                      'Content-Type': 'application/json'
+                  }
+              })
+              .then(response => {
+                  if (response.ok) {
+                      window.location.href = '/login1';
+                  } else {
+                      return response.json().then(data => {
+                          alert(data.message || 'Logout failed.');
+                      });
+                  }
+              })
+              .catch(error => {
+                  console.error('Logout error:', error);
+                  alert('Something went wrong.');
+              });
+          });
+      });
     </script>
 
-
-<script>
-        $.ajaxSetup({
-          headers: {
-            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-          }
-        });
-      </script>
-
+    <script>
+      $.ajaxSetup({
+        headers: {
+          'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+        }
+      });
+    </script>
 
   </body>
 </html>

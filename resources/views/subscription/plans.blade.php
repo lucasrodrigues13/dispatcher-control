@@ -41,10 +41,10 @@
                                 <i class="fas fa-boxes text-success"></i>
                                 {{ $plan->max_loads_per_month ?? 'Unlimited' }} Loads/Month
                             </li>
-                            <li class="mb-2">
+                            <!-- <li class="mb-2">
                                 <i class="fas fa-calendar-week text-success"></i>
                                 {{ $plan->max_loads_per_week ?? 'Unlimited' }} Loads/Week
-                            </li>
+                            </li> -->
                         </ul>
 
                         <div class="mt-4">

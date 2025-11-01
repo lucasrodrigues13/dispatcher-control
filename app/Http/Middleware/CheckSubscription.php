@@ -34,22 +34,23 @@ class CheckSubscription
             'isOnTrial' => $subscription ? $subscription->isOnTrial() : false,
             'isActive' => $subscription ? $subscription->isActive() : false,
             'isBlocked' => $subscription ? $subscription->isBlocked() : false,
-            'canAccessSystem' => $user->canAccessSystem(),
+            // 'canAccessSystem' => $user->canAccessSystem(),
         ]);
 
         // Verificar se tem assinatura ativa
-        if (!$user->canAccessSystem()) {
-            Log::warning('User blocked access', ['user_id' => $user->id]);
-            return redirect()->route('subscription.blocked')
-                           ->with('error', 'Your subscription is inactive. Please update your payment method.');
-        }
+        // if (!$user->canAccessSystem()) {
+        //     Log::warning('User blocked access', ['user_id' => $user->id]);
+        //     return redirect()->route('subscription.blocked')
+        //                    ->with('error', 'Your subscription is inactive. Please update your payment method.');
+        // }
 
         // Verificar limites de uso
-        $usageCheck = $this->billingService->checkUsageLimits($user);
+        $resourceType = 'carrier'; // ou 'employee', 'driver', etc.
+        $usageCheck = $this->billingService->checkUsageLimits($user, $resourceType);
 
         if (!$usageCheck['allowed']) {
             return redirect()->route('subscription.plans')
-                           ->with('warning', $usageCheck['reason']);
+                           ->with('warning', $usageCheck['message']);
         }
 
         // Adicionar warning se necessário

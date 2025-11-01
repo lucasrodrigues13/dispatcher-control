@@ -100,15 +100,15 @@ class Subscription extends Model
     }
 
     // Verifica se trial expirou
-    public function trialExpired()
-    {
-        // Planos unlimited não têm trial
-        if ($this->isUnlimited()) {
-            return false;
-        }
+    // public function trialExpired()
+    // {
+    //     // Planos unlimited não têm trial
+    //     if ($this->isUnlimited()) {
+    //         return false;
+    //     }
 
-        return $this->trial_ends_at && now()->isAfter($this->trial_ends_at);
-    }
+    //     return $this->trial_ends_at && now()->isAfter($this->trial_ends_at);
+    // }
 
     // NOVO: Verifica se está vencida (overdue)
     public function isOverdue()

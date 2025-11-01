@@ -54,13 +54,13 @@
                             <div class="row">
                                 {{-- Campos do usuário --}}
                                 <div class="mb-3 col-md-6">
-                                    <label for="name" class="form-label">Name</label>
+                                    <label for="name" class="form-label">Name <span class="text-danger">*</label>
                                     <input type="text" name="name" id="name" class="form-control" placeholder="Enter name" value="{{ old('name') }}" required>
                                 </div>
-                                
+
                                 <div class="col-md-6">
                                     <div class="form-group">
-                                        <label for="email" class="form-label">Email *</label>
+                                        <label for="email" class="form-label">Email <span class="text-danger">*</label>
                                         <input type="email" name="email" class="form-control @error('email') is-invalid @enderror"
                                             id="email" value="{{ old('email') }}" required>
 
@@ -72,25 +72,15 @@
                                     </div>
                                 </div>
 
-                                <div class="mb-3 col-md-6">
-                                    <label for="password" class="form-label">Password</label>
-                                    <input type="password" name="password" id="password" class="form-control" placeholder="Enter password" required>
-                                </div>
-
-                                <div class="mb-3 col-md-6">
-                                    <label for="password_confirmation" class="form-label">Confirm Password</label>
-                                    <input type="password" name="password_confirmation" id="password_confirmation" class="form-control" placeholder="Confirm password" required>
-                                </div>
-
                                 {{-- Campos do broker --}}
                                 <div class="mb-3 col-md-6">
-                                    <label for="license_number" class="form-label">License Number</label>
-                                    <input type="text" name="license_number" id="license_number" class="form-control" placeholder="Enter license number" value="{{ old('license_number') }}">
+                                    <label for="license_number" class="form-label">License Number <span class="text-danger">*</label>
+                                    <input type="text" name="license_number" id="license_number" class="form-control" placeholder="Enter license number" value="{{ old('license_number') }}" required>
                                 </div>
 
                                 <div class="mb-3 col-md-6">
-                                    <label for="company_name" class="form-label">Company Name</label>
-                                    <input type="text" name="company_name" id="company_name" class="form-control" placeholder="Enter company name" value="{{ old('company_name') }}">
+                                    <label for="company_name" class="form-label">Company Name <span class="text-danger">*<span class="text-danger">*</label>
+                                    <input type="text" name="company_name" id="company_name" class="form-control" placeholder="Enter company name" value="{{ old('company_name') }}" required>
                                 </div>
 
                                 <div class="mb-3 col-md-6">

@@ -1,0 +1,46 @@
+version: "3"
+
+volumes:
+    dispatcher-data-mariadb10:
+        driver: local
+
+services:
+    mariadb10-database:
+        image: mariadb:10.6.18
+        volumes:
+            - .:/app:delegated
+            - dispatcher-data-mariadb10:/var/lib/mysql
+        ports:
+            - "3306:3306"
+        command:
+            --sql_mode=ALLOW_INVALID_DATES --innodb-buffer-pool-size=512M --sort-buffer-size=128M
+        environment:
+            - MYSQL_ROOT_PASSWORD=root
+            - TZ=America/Sao_Paulo
+
+    dispatcher:
+        build: .
+        ports:
+            - "8080:80"
+            - "9003:9003"  # Xdebug port
+        volumes:
+            - .:/app:delegated
+            - ~/.composer:/home/application/.composer:delegated
+        links:
+            - mariadb10-database
+            - mailpit-dispatcher
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+
+    mailpit-dispatcher:
+        image: axllent/mailpit
+        volumes:
+            - ./data:/data
+        ports:
+            - 8025:8025
+            - 1025:1025
+        environment:
+            MP_MAX_MESSAGES: 5000
+            MP_DATABASE: /data/mailpit.db
+            MP_SMTP_AUTH_ACCEPT_ANY: 1
+            MP_SMTP_AUTH_ALLOW_INSECURE: 1

@@ -151,7 +151,7 @@
                             <h4 class="text-success">Payment Successful!</h4>
                             <p class="text-muted mb-4">Your subscription has been activated successfully.</p>
                         </div>
-                        <a href="{{ route('dashboard') }}" class="btn btn-success btn-lg">
+                        <a href="{{ route('dashboard.index') }}" class="btn btn-success btn-lg">
                             <i class="fas fa-tachometer-alt me-2"></i>
                             Go to Dashboard
                         </a>
@@ -191,6 +191,7 @@
 
 document.addEventListener('DOMContentLoaded', function() {
     const stripe = Stripe("{{ config('services.stripe.key') }}");
+    console.log('stripe', stripe);
     const elements = stripe.elements({
         appearance: {
             theme: 'stripe',

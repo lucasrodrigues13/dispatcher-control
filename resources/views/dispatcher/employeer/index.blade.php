@@ -42,7 +42,6 @@
               <table class="table table-striped align-middle">
                 <thead>
                   <tr>
-                    <th>ID</th>
                     <th>Name</th>
                     <th>Email</th>
                     <th>Phone</th>
@@ -55,7 +54,6 @@
                 <tbody>
                   @forelse($employeers as $item)
                     <tr>
-                      <td>{{ $item->id }}</td>
                       <td>{{ $item->user ? $item->user->name : 'N/A' }}</td>
                       <td>{{ $item->user->email }}</td>
                       <td>{{ $item->phone ?? 'N/A' }}</td>

@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\NewCarrierCredentialsMail;
 
 class BrokerController extends Controller
 {
@@ -29,25 +31,10 @@ class BrokerController extends Controller
 
     public function store(Request $request)
     {
-         $validator = Validator::make($request->all(), [
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|min:6',
-            // adicione outras validações se quiser
-        ], [
-            'email.unique' => 'This email already exists...',
-        ]);
-
-        if ($validator->fails()) {
-            return redirect()->back()
-                ->withErrors($validator)
-                ->withInput();
-        }
-
-        // Validação dos dados
-        $validated = $request->validate([
+        // Validação básica
+        $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|string|min:6|confirmed',
+            'email' => 'required|email|unique:users,email',
             'license_number' => 'nullable|string',
             'company_name' => 'nullable|string',
             'phone' => 'nullable|string',
@@ -58,42 +45,59 @@ class BrokerController extends Controller
             'fee_percent' => 'nullable|numeric|min:0|max:100',
             'payment_terms' => 'nullable|string',
             'payment_method' => 'nullable|string',
+        ], [
+            'email.unique' => 'This email already exists...',
         ]);
+
+        if ($validator->fails()) {
+            return redirect()->back()
+                ->withErrors($validator)
+                ->withInput();
+        }
+
+        // Gera senha automática baseada no nome
+        $base = \Illuminate\Support\Str::of($request->input('name'))
+            ->lower()
+            ->ascii()
+            ->replaceMatches('/[^a-z0-9]+/', '');
+        $plainPassword = (string) $base.'2025';
 
         // Criar o usuário
         $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => Hash::make($validated['password']),
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($plainPassword),
+            'must_change_password' => true,
         ]);
 
         // Criar o broker com user_id
         Broker::create([
             'user_id' => $user->id,
-            'license_number' => $validated['license_number'] ?? null,
-            'company_name' => $validated['company_name'] ?? null,
-            'phone' => $validated['phone'] ?? null,
-            'address' => $validated['address'] ?? null,
-            'notes' => $validated['notes'] ?? null,
-            'accounting_email' => $validated['accounting_email'] ?? null,
-            'accounting_phone_number' => $validated['accounting_phone_number'] ?? null,
-            'fee_percent' => $validated['fee_percent'] ?? null,
-            'payment_terms' => $validated['payment_terms'] ?? null,
-            'payment_method' => $validated['payment_method'] ?? null,
+            'license_number' => $request->license_number ?? null,
+            'company_name' => $request->company_name ?? null,
+            'phone' => $request->phone ?? null,
+            'address' => $request->address ?? null,
+            'notes' => $request->notes ?? null,
+            'accounting_email' => $request->accounting_email ?? null,
+            'accounting_phone_number' => $request->accounting_phone_number ?? null,
+            'fee_percent' => $request->fee_percent ?? null,
+            'payment_terms' => $request->payment_terms ?? null,
+            'payment_method' => $request->payment_method ?? null,
         ]);
-
 
         // Criar assinatura trial automática
         $billingService = app(BillingService::class);
         $billingService->createTrialSubscription($user);
 
+        // Atribuir role
         $role = DB::table('roles')->where('name', 'Broker')->first();
-
         $roles = new RolesUsers();
         $roles->user_id = $user->id;
         $roles->role_id = $role->id;
-
         $roles->save();
+
+        // Enviar email com credenciais
+        Mail::to($user->email)->queue(new NewCarrierCredentialsMail($user, $plainPassword));
 
         // Se veio do fluxo de registro via auth, dispara evento e faz login
         if ($request->register_type === "auth_register") {
@@ -102,7 +106,9 @@ class BrokerController extends Controller
             return redirect(RouteServiceProvider::HOME);
         }
 
-        return redirect()->route('brokers.index')->with('success', 'Broker created successfully.');
+        return redirect()
+            ->route('brokers.index')
+            ->with('success', 'Broker criado com sucesso; credenciais enviadas por e-mail.');
     }
 
     public function show($id)

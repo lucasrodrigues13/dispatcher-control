@@ -5,21 +5,175 @@ namespace App\Services;
 use App\Models\User;
 use App\Models\Plan;
 use App\Models\Subscription;
-use Carbon\Carbon;
+// use App\Models\Carrier;
+use App\Services\StripeService;
+use App\Repositories\UsageTrackingRepository;
+// use Illuminate\Support\Facades\Log;
+// use Carbon\Carbon;
 
 class BillingService
 {
     protected $stripeService;
+    protected $usageTrackingRepo;
 
-    public function __construct(StripeService $stripeService)
+    public function __construct(StripeService $stripeService, UsageTrackingRepository $usageTrackingRepo)
     {
         $this->stripeService = $stripeService;
+        $this->usageTrackingRepo = $usageTrackingRepo;
     }
 
-    /**
-     * Cria ou atualiza uma assinatura
-     */
-    public function createOrUpdateSubscription(User $user, Plan $plan, array $paymentData = [])
+    // public function canCreateCarrier(User $user): array
+    // {
+    //     $subscription = $user->subscription;
+
+    //     if (!$subscription) {
+    //         return [
+    //             'allowed' => false,
+    //             'requires_payment' => false,
+    //             'reason' => 'no_subscription',
+    //             'message' => 'Você precisa de uma assinatura ativa para criar carriers.',
+    //         ];
+    //     }
+
+    //     $plan = $subscription->plan;
+
+    //     // Plano unlimited sempre pode criar
+    //     if ($plan && $plan->slug === 'carrier-unlimited') {
+    //         return [
+    //             'allowed' => true,
+    //             'requires_payment' => false,
+    //         ];
+    //     }
+
+    //     // Conta carriers do dispatcher atual
+    //     $dispatcher = $user->dispatchers()->first();
+    //     if (!$dispatcher) {
+    //         return [
+    //             'allowed' => false,
+    //             'requires_payment' => false,
+    //             'reason' => 'no_dispatcher',
+    //             'message' => 'Você precisa ser um dispatcher para criar carriers.',
+    //         ];
+    //     }
+
+    //     $currentCarriersCount = Carrier::where('dispatcher_company_id', $dispatcher->id)->count();
+
+    //     // Para planos free/trial, limite de 1 carrier gratuito
+    //     $freeCarriersLimit = 1;
+    //     $additionalCarrierPrice = 10.00;
+
+    //     if ($currentCarriersCount < $freeCarriersLimit) {
+    //         // Ainda tem carrier gratuito disponível
+    //         return [
+    //             'allowed' => true,
+    //             'requires_payment' => false,
+    //             'is_free' => true,
+    //             'remaining_free' => $freeCarriersLimit - $currentCarriersCount,
+    //         ];
+    //     }
+
+    //     // Precisa pagar por carrier adicional
+    //     return [
+    //         'allowed' => false, // Não permitir até confirmar pagamento
+    //         'requires_payment' => true,
+    //         'current_carriers' => $currentCarriersCount,
+    //         'free_limit' => $freeCarriersLimit,
+    //         'additional_price' => $additionalCarrierPrice,
+    //         'message' => "Você atingiu o limite de carriers gratuitos ({$freeCarriersLimit}). Carriers adicionais custam \${$additionalCarrierPrice} cada.",
+    //     ];
+    // }
+
+    // /**
+    //  * Processa pagamento por carrier adicional
+    //  */
+    // public function processAdditionalCarrierPayment(User $user, string $paymentIntentId): array
+    // {
+    //     try {
+    //         $paymentIntent = $this->stripeService->retrievePaymentIntent($paymentIntentId);
+
+    //         if ($paymentIntent->status !== 'succeeded') {
+    //             return [
+    //                 'success' => false,
+    //                 'message' => 'Pagamento não confirmado. Status: ' . $paymentIntent->status
+    //             ];
+    //         }
+
+    //         // Registra o pagamento usando sua estrutura existente
+    //         $subscription = $user->subscription;
+
+    //         \App\Models\Payment::create([
+    //             'subscription_id' => $subscription->id,
+    //             'amount' => 10.00,
+    //             'status' => 'paid',
+    //             'payment_method' => 'stripe',
+    //             'transaction_id' => $paymentIntent->id,
+    //             'gateway_response' => json_encode($paymentIntent),
+    //             'paid_at' => now(),
+    //             'type' => 'additional_carrier',
+    //             'metadata' => json_encode([
+    //                 'payment_intent_id' => $paymentIntentId,
+    //                 'description' => 'Additional Carrier Fee',
+    //                 'user_id' => $user->id,
+    //             ]),
+    //         ]);
+
+    //         return [
+    //             'success' => true,
+    //             'message' => 'Pagamento processado com sucesso! Você pode criar o carrier agora.',
+    //         ];
+
+    //     } catch (\Exception $e) {
+    //         \Log::error('Erro ao processar pagamento de carrier adicional', [
+    //             'error' => $e->getMessage(),
+    //             'user_id' => $user->id,
+    //         ]);
+
+    //         return [
+    //             'success' => false,
+    //             'message' => 'Erro ao processar pagamento: ' . $e->getMessage()
+    //         ];
+    //     }
+    // }
+
+    // /**
+    //  * Cria Payment Intent para carrier adicional
+    //  */
+    // public function createAdditionalCarrierPaymentIntent(User $user): array
+    // {
+    //     try {
+    //         $amount = 1000; // $10.00 em centavos
+
+    //         $metadata = [
+    //             'user_id' => (string) $user->id,
+    //             'user_email' => $user->email,
+    //             'transaction_type' => 'additional_carrier',
+    //             'description' => 'Additional Carrier Fee',
+    //         ];
+
+    //         $intent = $this->stripeService->createPaymentIntent($amount, $metadata);
+
+    //         return [
+    //             'success' => true,
+    //             'client_secret' => $intent->client_secret,
+    //             'amount' => $amount,
+    //         ];
+
+    //     } catch (\Exception $e) {
+    //         \Log::error('Erro ao criar Payment Intent para carrier adicional', [
+    //             'error' => $e->getMessage(),
+    //             'user_id' => $user->id,
+    //         ]);
+
+    //         return [
+    //             'success' => false,
+    //             'error' => 'Erro ao criar Payment Intent: ' . $e->getMessage()
+    //         ];
+    //     }
+    // }
+
+    // // Métodos existentes mantidos...
+
+  public function createOrUpdateSubscription(User $user, Plan $plan, array $paymentData = [])
     {
         $existingSubscription = $user->subscription;
         $amount = $paymentData['amount'] ?? $plan->price;
@@ -257,116 +411,85 @@ class BillingService
     public function getUsageStats(User $user)
     {
         $subscription = $user->subscription;
-
         if (!$subscription || !$subscription->plan) {
             return null;
         }
-
         $plan = $subscription->plan;
+        $usage = $this->usageTrackingRepo->getCurrentUsage($user);
 
-        // Se for plano carrier unlimited, retorna limites como null (ilimitado)
+        // Se for plano ilimitado
         if ($plan->slug === 'carrier-unlimited') {
             return [
                 'carriers' => [
-                    'used' => $user->carriers()->count(),
-                    'limit' => null, // ilimitado
+                    'used' => $usage ? $usage->carriers_count : 0,
+                    'limit' => null,
                 ],
                 'employees' => [
-                    'used' => $user->employees()->count(),
-                    'limit' => null, // ilimitado
+                    'used' => $usage ? $usage->employees_count : 0,
+                    'limit' => null,
                 ],
                 'drivers' => [
-                    'used' => $user->drivers()->count(),
-                    'limit' => null, // ilimitado
+                    'used' => $usage ? $usage->drivers_count : 0,
+                    'limit' => null,
                 ],
                 'loads_this_month' => [
-                    'used' => $user->loads()
-                               ->whereMonth('loads.created_at', now()->month)
-                               ->count(),
-                    'limit' => null, // ilimitado
-                ],
-                'loads_this_week' => [
-                    'used' => $user->loads()
-                               ->whereBetween('loads.created_at', [
-                                    now()->startOfWeek(),
-                                    now()->endOfWeek()
-                               ])->count(),
-                    'limit' => null, // ilimitado
+                    'used' => $usage ? $usage->loads_count : 0,
+                    'limit' => null,
                 ],
             ];
         }
 
-        // Lógica normal para outros planos
+        // Verifica se está em trial
+        $isTrial = $subscription->trial_ends_at && $subscription->trial_ends_at->isFuture();
+
         return [
             'carriers' => [
-                'used' => $user->carriers()->count(),
+                'used' => $usage ? $usage->carriers_count : 0,
                 'limit' => $plan->max_carriers,
             ],
             'employees' => [
-                'used' => $user->employees()->count(),
+                'used' => $usage ? $usage->employees_count : 0,
                 'limit' => $plan->max_employees,
             ],
             'drivers' => [
-                'used' => $user->drivers()->count(),
+                'used' => $usage ? $usage->drivers_count : 0,
                 'limit' => $plan->max_drivers,
             ],
             'loads_this_month' => [
-                'used' => $user->loads()
-                               ->whereMonth('loads.created_at', now()->month)
-                               ->count(),
-                'limit' => $plan->max_loads_per_month,
-            ],
-            'loads_this_week' => [
-                'used' => $user->loads()
-                               ->whereBetween('loads.created_at', [
-                                    now()->startOfWeek(),
-                                    now()->endOfWeek()
-                               ])->count(),
-                'limit' => $plan->max_loads_per_week,
+                'used' => $usage ? $usage->loads_count : 0,
+                'limit' => $isTrial ? null : $plan->max_loads_per_month, // ilimitado no trial
             ],
         ];
     }
 
-    public function checkUsageLimits(User $user): array
-    {
-        $stats = $this->getUsageStats($user);
+    public function calculateMonthlyBilling(User $user)
+        {
+            $month = now()->month;
+            $subscription = $user->subscription;
+            $plan = $subscription->plan;
+            $monthlyLoads = $plan->max_loads_per_month;
+            $usage = $this->usageTrackingRepo->getCurrentUsage($user);
 
-        // sem assinatura ou sem plano não bloqueia
-        if (!$stats) {
-            return ['allowed' => true];
-        }
+            // Mês 1 = Trial gratuito
+            // if ($user->subscription->started_at->month === $month &&
+            //     $user->subscription->started_at->year === now()->year) {
+            //     return ['plan' => 'trial', 'cost' => 0];
+            // }
 
-        // Se for carrier unlimited, sempre permitir
-        $subscription = $user->subscription;
-        if ($subscription && $subscription->plan && $subscription->plan->slug === 'carrier-unlimited') {
-            return ['allowed' => true];
-        }
-
-        // 1) bloqueia se ultrapassar qualquer limite
-        foreach ($stats as $key => $data) {
-            if ($data['limit'] !== null && $data['used'] > $data['limit']) {
-                return [
-                    'allowed' => false,
-                    'reason'  => "Você ultrapassou o limite de {$key} ({$data['used']} de {$data['limit']}).",
-                ];
-            }
-        }
-
-        // 2) adiciona aviso caso esteja chegando perto (80% do limite)
-        foreach ($stats as $key => $data) {
-            if ($data['limit'] !== null && $data['limit'] > 0 && $data['used'] >= $data['limit'] * 0.8) {
+            // Mês 2+ = Verificar limite
+            if ($usage->loads_count == $monthlyLoads) {
                 return [
                     'allowed' => true,
-                    'warning' => true,
-                    'message' => "Você está usando {$data['used']} de {$data['limit']} {$key} permitidos. Atenção ao limite do seu plano.",
+                    'suggest_upgrade' => true,
+                    'message' => 'You have reached the employee limit for your plan. Please upgrade to add more.',
                 ];
             }
         }
 
-        // tudo ok
-        return ['allowed' => true];
+    public function checkUsageLimits(User $user, string $resourceType)
+    {
+        return $this->usageTrackingRepo->checkLimits($user, $resourceType);
     }
-
     /**
      * Verifica se o usuário é um carrier
      */
@@ -388,5 +511,104 @@ class BillingService
         // Lógica normal de rastreamento para outros usuários
         // Implementar conforme necessário
         return true;
+    }
+
+    /**
+     * Cria um plano customizado para o usuário baseado nas quantidades de usuários desejadas
+     * 
+     * @param User $user
+     * @param int $carriers Quantidade de carriers desejada
+     * @param int $dispatchers Quantidade de dispatchers desejada
+     * @param int $employees Quantidade de employees desejada
+     * @param int $drivers Quantidade de drivers desejada
+     * @return Plan
+     */
+    public function createCustomPlan(User $user, int $carriers = 1, int $dispatchers = 1, int $employees = 0, int $drivers = 0): Plan
+    {
+        // Validar mínimo de 2 usuários
+        $totalUsers = $carriers + $dispatchers + $employees + $drivers;
+        
+        if ($totalUsers < 2) {
+            throw new \Exception('O plano premium requer no mínimo 2 usuários (mínimo $20/mês)');
+        }
+
+        // Calcular preço: $10 por usuário, mínimo $20
+        $price = max(20.00, $totalUsers * 10.00);
+
+        // Verificar se o usuário já tem um plano customizado
+        $existingCustomPlan = Plan::forUser($user->id)->first();
+        
+        if ($existingCustomPlan) {
+            // Atualizar plano customizado existente
+            $existingCustomPlan->update([
+                'name' => "Plano Customizado - {$totalUsers} usuários",
+                'slug' => 'custom-' . $user->id . '-' . time(),
+                'price' => $price,
+                'max_carriers' => $carriers,
+                'max_dispatchers' => $dispatchers,
+                'max_employees' => $employees,
+                'max_drivers' => $drivers,
+                'max_loads_per_month' => null, // Ilimitado no premium (ou configurar conforme regras finais)
+                'is_custom' => true,
+                'active' => true,
+            ]);
+            
+            return $existingCustomPlan->fresh();
+        }
+
+        // Criar novo plano customizado
+        return Plan::create([
+            'user_id' => $user->id,
+            'name' => "Plano Customizado - {$totalUsers} usuários",
+            'slug' => 'custom-' . $user->id . '-' . time(),
+            'price' => $price,
+            'max_carriers' => $carriers,
+            'max_dispatchers' => $dispatchers,
+            'max_employees' => $employees,
+            'max_drivers' => $drivers,
+            'max_loads_per_month' => null, // Ilimitado no premium (ou configurar conforme regras finais)
+            'is_trial' => false,
+            'trial_days' => 0,
+            'is_custom' => true,
+            'active' => true,
+        ]);
+    }
+
+    /**
+     * Calcula o preço de um plano customizado baseado nas quantidades
+     * 
+     * @param int $carriers
+     * @param int $dispatchers
+     * @param int $employees
+     * @param int $drivers
+     * @return array ['total_users' => int, 'price' => float, 'valid' => bool, 'message' => string]
+     */
+    public function calculateCustomPlanPrice(int $carriers = 1, int $dispatchers = 1, int $employees = 0, int $drivers = 0): array
+    {
+        $totalUsers = $carriers + $dispatchers + $employees + $drivers;
+        
+        if ($totalUsers < 2) {
+            return [
+                'total_users' => $totalUsers,
+                'price' => 20.00,
+                'valid' => false,
+                'message' => 'Mínimo de 2 usuários obrigatório ($20/mês)',
+            ];
+        }
+
+        $price = $totalUsers * 10.00;
+
+        return [
+            'total_users' => $totalUsers,
+            'price' => $price,
+            'valid' => true,
+            'message' => "Total: $" . number_format($price, 2) . "/mês",
+            'breakdown' => [
+                'carriers' => $carriers,
+                'dispatchers' => $dispatchers,
+                'employees' => $employees,
+                'drivers' => $drivers,
+            ],
+        ];
     }
 }

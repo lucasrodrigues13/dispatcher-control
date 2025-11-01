@@ -6,6 +6,7 @@ use App\Models\Carrier;
 use App\Models\User;
 use App\Models\Dispatcher;
 use App\Models\RolesUsers;
+use App\Repositories\UsageTrackingRepository;
 use App\Providers\RouteServiceProvider;
 use App\Services\BillingService;
 use Illuminate\Auth\Events\Registered;
@@ -13,135 +14,149 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
+use App\Mail\NewCarrierCredentialsMail;
 
 class CarrierController extends Controller
 {
     public function index()
     {
-        $carriers = Carrier::with(['dispatchers.user', 'user'])->paginate(10);
+        // Busca o dispatcher do usuário logado
+        $dispatcher = Dispatcher::where('user_id', Auth::id())->first();
+
+        // Se não existir dispatcher, retorna vazio
+        if (!$dispatcher) {
+            $carriers = collect();
+        } else {
+            // Filtra os carriers pelo dispatcher_company_id
+            $carriers = Carrier::with(['dispatchers.user', 'user'])
+                ->where('dispatcher_company_id', $dispatcher->id)
+                ->paginate(10);
+        }
+
         return view('carrier.self.index', compact('carriers'));
     }
 
     // Mostra o formulário para criar um novo carrier
     public function create()
     {
-        $dispatchers = Dispatcher::all();
-        return view('carrier.self.create', compact('dispatchers'));
+        $billingService = app(BillingService::class);
+        $usageCheck = $billingService->checkUsageLimits(Auth::user(), 'carrier');
+
+        $showUpgradeModal = !empty($usageCheck['suggest_upgrade']);
+
+        $dispatchers = Dispatcher::with('user')
+            ->where('user_id', auth()->id())
+            ->first();
+
+        return view('carrier.self.create', compact('dispatchers', 'showUpgradeModal', 'usageCheck'));
     }
 
     public function store(Request $request)
     {
-         $validator = Validator::make($request->all(), [
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|min:6',
-            // adicione outras validações se quiser
-        ], [
-            'email.unique' => 'This email already exists...',
-        ]);
-
-        if ($validator->fails()) {
-            return redirect()->back()
-                ->withErrors($validator)
-                ->withInput();
-        }
-
-        $validatedData = $request->validate([
-            // Dados do usuário
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:6|confirmed',
-
-            // Dados do carrier
+        // 1) Validação (só roda se passou no usage)
+        $validated = $request->validate([
+            'name'         => 'required|string|max:255',
+            'email'        => 'required|email|unique:users,email',
             'company_name' => 'required|string|max:255',
-            'phone' => 'required|string|max:20',
-            'contact_name' => 'nullable|string|max:255',
-            'about' => 'nullable|string',
+            'contact_name' => 'required|string|max:255',
+            'phone'        => 'nullable|string|max:20',
+            'contact_phone'=> 'nullable|string|max:20',
+            'address'      => 'nullable|string|max:255',
+            'city'         => 'nullable|string|max:100',
+            'state'        => 'nullable|string|max:100',
+            'zip'          => 'nullable|string|max:20',
+            'country'      => 'nullable|string|max:100',
+            'mc'           => 'nullable|string|max:50',
+            'dot'          => 'nullable|string|max:50',
+            'ein'          => 'nullable|string|max:50',
+            'about'        => 'nullable|string',
+            'website'      => 'nullable|string|max:255',
             'trailer_capacity' => 'nullable|integer',
-            'is_auto_hauler' => 'nullable|boolean',
-            'is_towing' => 'nullable|boolean',
-            'is_driveaway' => 'nullable|boolean',
-            'contact_phone' => 'nullable|string|max:20',
-            'address' => 'required|string|max:255',
-            'city' => 'nullable|string|max:100',
-            'state' => 'nullable|string|max:100',
-            'zip' => 'nullable|string|max:20',
-            'country' => 'nullable|string|max:100',
-            'mc' => 'nullable|string|max:50',
-            'dot' => 'nullable|string|max:50',
-            'ein' => 'nullable|string|max:50',
-            'dispatcher_company_id' => 'required|exists:dispatchers,id',
+            'is_auto_hauler'   => 'nullable|boolean',
+            'is_towing'        => 'nullable|boolean',
+            'is_driveaway'     => 'nullable|boolean',
+            'dispatcher_company_id' => 'nullable|exists:dispatchers,id',
         ]);
 
-        try {
-            DB::beginTransaction();
-
-            // Cria o usuário
-            $user = User::create([
-                'name' => $validatedData['name'],
-                'email' => $validatedData['email'],
-                'password' => Hash::make($validatedData['password']),
-            ]);
-
-            // Cria o carrier vinculado ao usuário
-            Carrier::create([
-                'company_name' => $validatedData['company_name'],
-                'phone' => $validatedData['phone'],
-                'contact_name' => $validatedData['contact_name'] ?? null,
-                'about' => $validatedData['about'] ?? null,
-                'website' => $validatedData['website'] ?? null,
-                'trailer_capacity' => $validatedData['trailer_capacity'] ?? null,
-                'is_auto_hauler' => $validatedData['is_auto_hauler'] ?? false,
-                'is_towing' => $validatedData['is_towing'] ?? false,
-                'is_driveaway' => $validatedData['is_driveaway'] ?? false,
-                'contact_phone' => $validatedData['contact_phone'] ?? null,
-                'address' => $validatedData['address'],
-                'city' => $validatedData['city'] ?? null,
-                'state' => $validatedData['state'] ?? null,
-                'zip' => $validatedData['zip'] ?? null,
-                'country' => $validatedData['country'] ?? null,
-                'mc' => $validatedData['mc'] ?? null,
-                'dot' => $validatedData['dot'] ?? null,
-                'ein' => $validatedData['ein'] ?? null,
-                'dispatcher_company_id' => $validatedData['dispatcher_company_id'],
-                'user_id' => $user->id,
-            ]);
-
-            // Atribui role de Carrier
-            $role = DB::table('roles')->where('name', 'Carrier')->first();
-
-            if ($role) {
-                $roles = new RolesUsers();
-                $roles->user_id = $user->id;
-                $roles->role_id = $role->id;
-                $roles->save();
+        // 2) Preenche dispatcher somente após passar no usage
+        if (empty($validated['dispatcher_company_id'])) {
+            $authUser = Auth::user();
+            $userDispatcher = Dispatcher::where('user_id', $authUser->id)->first();
+            if ($userDispatcher) {
+                $validated['dispatcher_company_id'] = $userDispatcher->id;
             }
-
-            // Criar assinatura ilimitada para o carrier
-            $billingService = app(BillingService::class);
-            $billingService->createCarrierUnlimitedSubscription($user);
-
-            DB::commit();
-
-            // Se veio do fluxo de registro via auth, dispara evento e faz login
-            if ($request->register_type === "auth_register") {
-                event(new Registered($user));
-                Auth::login($user);
-                return redirect(RouteServiceProvider::HOME);
-            }
-
-            return redirect()->route('carriers.index')->with('success', 'Carrier e usuário criados com sucesso com acesso ilimitado.');
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            return redirect()->back()
-                ->withErrors(['error' => 'Erro ao criar carrier: ' . $e->getMessage()])
-                ->withInput();
         }
+
+        $base = \Illuminate\Support\Str::of($validated['name'])->lower()->ascii()->replaceMatches('/[^a-z0-9]+/', '');
+        $plainPassword = (string) $base.'2025';
+
+        // 4) Cria usuário
+        $user = User::create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'password' => Hash::make($plainPassword),
+            'must_change_password' => true,
+            'email_verified_at' => now()
+        ]);
+
+        // 5) Cria carrier
+        Carrier::create([
+            'user_id'          => $user->id,
+            'company_name'     => $validated['company_name'],
+            'phone'            => $validated['phone'],
+            'contact_name'     => $validated['contact_name'] ?? null,
+            'about'            => $validated['about'] ?? null,
+            'website'          => $validated['website'] ?? null,
+            'trailer_capacity' => $validated['trailer_capacity'] ?? null,
+            'is_auto_hauler'   => (bool) ($validated['is_auto_hauler'] ?? false),
+            'is_towing'        => (bool) ($validated['is_towing'] ?? false),
+            'is_driveaway'     => (bool) ($validated['is_driveaway'] ?? false),
+            'contact_phone'    => $validated['contact_phone'] ?? null,
+            'address'          => $validated['address'],
+            'city'             => $validated['city'] ?? null,
+            'state'            => $validated['state'] ?? null,
+            'zip'              => $validated['zip'] ?? null,
+            'country'          => $validated['country'] ?? null,
+            'mc'               => $validated['mc'] ?? null,
+            'dot'              => $validated['dot'] ?? null,
+            'ein'              => $validated['ein'] ?? null,
+            'dispatcher_company_id' => $validated['dispatcher_company_id'],
+        ]);
+
+        // 6) Contabiliza uso
+        app(UsageTrackingRepository::class)->incrementUsage(Auth::user(), 'carrier');
+
+        // 7) Role "Carrier"
+        $role = DB::table('roles')->where('name', 'Carrier')->first();
+        if ($role) {
+            $roles = new RolesUsers();
+            $roles->user_id = $user->id;
+            $roles->role_id = $role->id;
+            $roles->save();
+        }
+
+        // 8) Assinatura trial
+        $billingService = app(BillingService::class);
+        $billingService->createTrialSubscription($user);
+
+        // 9) E-mail
+        Mail::to($user->email)->queue(new NewCarrierCredentialsMail($user, $plainPassword));
+
+        // 10) Fluxo opcional
+        if ($request->register_type === "auth_register") {
+            event(new Registered($user));
+            Auth::login($user);
+            return redirect(RouteServiceProvider::HOME);
+        }
+
+        return redirect()
+            ->route('carriers.index')
+            ->with('success', 'Carrier e usuário criados com sucesso; credenciais enviadas por e-mail.');
     }
 
-    // Mostra os detalhes de um carrier
+    // Resto dos métodos permanecem iguais...
     public function show(string $id)
     {
         $carrier = Carrier::with(['user', 'dispatcher'])->findOrFail($id);
@@ -231,10 +246,10 @@ class CarrierController extends Controller
             ]);
 
             // Verificar se tem assinatura unlimited, se não tiver, criar
-            $billingService = app(BillingService::class);
-            if (!$user->subscription || $user->subscription->plan->slug !== 'carrier-unlimited') {
-                $billingService->createCarrierUnlimitedSubscription($user);
-            }
+            // $billingService = app(BillingService::class);
+            // if (!$user->subscription || $user->subscription->plan->slug !== 'carrier-unlimited') {
+            //     $billingService->createCarrierUnlimitedSubscription($user);
+            // }
 
             DB::commit();
 

@@ -7,8 +7,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     use HasApiTokens, HasFactory, Notifiable;
 
@@ -16,6 +17,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'must_change_password',
+        'email_verified_at',
     ];
 
     protected $hidden = [
@@ -67,7 +70,7 @@ class User extends Authenticatable
 
     public function dispatchers()
     {
-        return $this->hasMany(Dispatcher::class);
+        return $this->hasOne(Dispatcher::class);
     }
 
      public function loads()

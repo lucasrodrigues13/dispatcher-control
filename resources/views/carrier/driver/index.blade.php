@@ -42,7 +42,6 @@
               <table class="table table-striped align-middle">
                 <thead>
                   <tr>
-                    <th>ID</th>
                     <th>Name</th>
                     <th>Email</th>
                     <th>Carrier</th>
@@ -54,7 +53,6 @@
                 <tbody>
                   @forelse($drivers as $item)
                     <tr>
-                      <td>{{ $item->id }}</td>
                       <td>{{ $item->user->name ?? 'N/A' }}</td>
                       <td>{{ $item->user->email ?? 'N/A' }}</td>
                       <td>{{ $item->carrier->company_name ?? 'N/A' }}</td>

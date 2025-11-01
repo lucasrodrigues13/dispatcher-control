@@ -216,14 +216,17 @@
                         <td>{{ $load->creation_date ? \Carbon\Carbon::parse($load->creation_date)->format('m-d-Y') : '' }}</td>
                         <td>{{ $load->dispatcher }}</td>
                         <td class="text-center">
-                            <select class="form-select form-select-sm select-employee" data-load-id="{{ $load->id }}" style="width: 150px;">
+                            <select class="form-select form-select-sm select-employee"
+                                    data-load-id="{{ $load->id }}" style="width: 150px;">
                                 <option value="">Unassigned</option>
-                                @foreach ($employees as $employee)
+                                @forelse ($employees as $employee)
                                     <option value="{{ $employee->id }}"
-                                        {{ $load->employee_id == $employee->id ? 'selected' : '' }}>
-                                        {{ $employee->user->name }}
+                                        {{ (int) $load->employee_id === (int) $employee->id ? 'selected' : '' }}>
+                                        {{ $employee->user->name ?? ('ID '.$employee->id) }}
                                     </option>
-                                @endforeach
+                                @empty
+                                    <option value="" disabled>No employees found</option>
+                                @endforelse
                             </select>
                         </td>
                         <td>{{ $load->trip }}</td>
@@ -444,12 +447,18 @@
         <!-- Select Dispatcher -->
         <div class="col-md-6 mb-4">
             <label for="dispatcher_id" class="form-label fw-semibold">Dispatcher</label>
-            <select name="dispatcher_id" id="dispatcher_id" class="form-select" required>
-                <option value="" disabled selected>Select Dispatcher</option>
-                @foreach($dispatchers as $item)
-                    <option value="{{ $item->id }}">{{ $item->user->name }}</option>
-                @endforeach
-            </select>
+
+            @if($dispatchers)
+                {{-- Envia o ID oculto no POST --}}
+                <input type="hidden" name="dispatcher_id" value="{{ $dispatchers->id }}">
+
+                {{-- Mostra o nome do dispatcher logado --}}
+                <input type="text" class="form-control" value="{{ $dispatchers->user->name }}" readonly>
+            @else
+                <div class="alert alert-warning mb-0">
+                    No dispatcher linked to your account. Please contact an administrator.
+                </div>
+            @endif
         </div>
 
         <!-- Select Employee -->
@@ -457,6 +466,13 @@
             <label for="employee_id" class="form-label fw-semibold">Add Employee</label>
             <select name="employee_id" id="employee_id" class="form-select">
                 <option value="">Select Employee</option>
+                @forelse ($employees as $employee)
+                    <option value="{{ $employee->id }}">
+                        {{ $employee->user->name ?? ('ID '.$employee->id) }}
+                    </option>
+                @empty
+                    <option value="" disabled>No employees found</option>
+                @endforelse
             </select>
         </div>
 
@@ -522,9 +538,14 @@
             <div class="col-md-3 mb-4">
               <select name="dispatcher_id" class="form-select">
                 <option value="" selected>Filter Dispatcher</option>
-                @foreach($dispatchers as $item)
-                  <option value="{{ $item->id }}">{{ $item->user->name }}</option>
-                @endforeach
+                @if($dispatchers)
+                    <input type="hidden" name="dispatcher_id" value="{{ $dispatchers->id }}">
+                    <input type="text" class="form-control" value="{{ $dispatchers->user->name }}" readonly>
+                @else
+                    <div class="alert alert-warning mb-0">
+                        No dispatcher linked to your account. Please contact an administrator.
+                    </div>
+                @endif
               </select>
             </div>
 

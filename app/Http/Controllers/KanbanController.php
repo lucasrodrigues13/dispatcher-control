@@ -167,7 +167,9 @@ public function kanbaFilter(Request $request)
         $query->where('driver', 'like', '%' . $request->driver . '%');
     }
 
-    $dispatchers = Dispatcher::with("user")->get();
+    $dispatchers = Dispatcher::with('user')
+        ->where('user_id', auth()->id())
+        ->first();
     $carriers = Carrier::with("user")->get();
     $employees = Employeer::with("user")->get();
     $loads = $query->orderByDesc('id')->paginate(50);
@@ -182,7 +184,9 @@ public function kanbaFilter(Request $request)
  */
 public function kanbaMode()
 {
-    $dispatchers = Dispatcher::with("user")->get();
+    $dispatchers = Dispatcher::with('user')
+        ->where('user_id', auth()->id())
+        ->first();
     $carriers = Carrier::with("user")->get();
     $employees = Employeer::with("user")->get();
     $loads = Load::where("status_move", "no_moved")->paginate(10);

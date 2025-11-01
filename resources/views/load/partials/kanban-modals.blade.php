@@ -35,13 +35,19 @@
                                     <input type="date" class="form-control" id="creation_date" name="creation_date">
                                 </div>
                                 <div class="col-md-3 mb-2">
-                                    <label class="form-label fw-bold">Dispatcher:</label>
-                                    <select class="form-select" id="dispatcher_id" name="dispatcher_id">
-                                        <option value="">-- Select Dispatcher --</option>
-                                        @foreach($dispatchers as $dispatcher)
-                                            <option value="{{ $dispatcher->id }}">{{ $dispatcher->user ? $dispatcher->user->name : $dispatcher->name }}</option>
-                                        @endforeach
-                                    </select>
+                                    <label for="dispatcher_id" class="form-label fw-semibold">Dispatcher</label>
+
+                                    @if($dispatchers)
+                                        {{-- Envia o ID oculto no POST --}}
+                                        <input type="hidden" name="dispatcher_id" value="{{ $dispatchers->id }}">
+
+                                        {{-- Mostra o nome do dispatcher logado --}}
+                                        <input type="text" class="form-control" value="{{ $dispatchers->user->name }}" readonly>
+                                    @else
+                                        <div class="alert alert-warning mb-0">
+                                            No dispatcher linked to your account. Please contact an administrator.
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
                             <div class="row">
@@ -261,7 +267,7 @@
             </div>
             <div class="modal-body">
                 <p class="text-muted">Select which fields should be visible on the Kanban cards:</p>
-                
+
                 <!-- Basic Information -->
                 <h6 class="text-primary mt-3 mb-2"><i class="fas fa-info-circle me-1"></i>Basic Information</h6>
                 <div class="row">
@@ -506,15 +512,19 @@
                             <input type="text" name="internal_load_id" class="form-control" placeholder="Internal Load ID" value="{{ request('internal_load_id') }}">
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label">Dispatcher</label>
-                            <select name="dispatcher_id" class="form-select">
-                                <option value="">-- Select Dispatcher --</option>
-                                @foreach($dispatchers as $dispatcher)
-                                    <option value="{{ $dispatcher->id }}" {{ request('dispatcher_id') == $dispatcher->id ? 'selected' : '' }}>
-                                        {{ $dispatcher->user ? $dispatcher->user->name : $dispatcher->name }}
-                                    </option>
-                                @endforeach
-                            </select>
+                            <label for="dispatcher_id" class="form-label fw-semibold">Dispatcher</label>
+
+                            @if($dispatchers)
+                                {{-- Envia o ID oculto no POST --}}
+                                <input type="hidden" name="dispatcher_id" value="{{ $dispatchers->id }}">
+
+                                {{-- Mostra o nome do dispatcher logado --}}
+                                <input type="text" class="form-control" value="{{ $dispatchers->user->name }}" readonly>
+                            @else
+                                <div class="alert alert-warning mb-0">
+                                    No dispatcher linked to your account. Please contact an administrator.
+                                </div>
+                            @endif
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Carrier</label>
@@ -588,12 +598,18 @@
                     <div class="row">
                         <div class="col-md-6 mb-4">
                             <label for="dispatcher_id" class="form-label fw-semibold">Dispatcher</label>
-                            <select name="dispatcher_id" id="dispatcher_id" class="form-select" required>
-                                <option value="" disabled selected>Select Dispatcher</option>
-                                @foreach($dispatchers as $item)
-                                    <option value="{{ $item->id }}">{{ $item->user ? $item->user->name : ($item->name ?? 'User #' . $item->id) }}</option>
-                                @endforeach
-                            </select>
+
+                            @if($dispatchers)
+                                {{-- Envia o ID oculto no POST --}}
+                                <input type="hidden" name="dispatcher_id" value="{{ $dispatchers->id }}">
+
+                                {{-- Mostra o nome do dispatcher logado --}}
+                                <input type="text" class="form-control" value="{{ $dispatchers->user->name }}" readonly>
+                            @else
+                                <div class="alert alert-warning mb-0">
+                                    No dispatcher linked to your account. Please contact an administrator.
+                                </div>
+                            @endif
                         </div>
                         <div class="col-md-6 mb-4">
                             <label for="employee_id" class="form-label fw-semibold">Add Employee</label>
