@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use App\Models\Carrier;
 use App\Models\Driver;
 use App\Models\Employee;
@@ -32,8 +33,17 @@ class DashboardController extends Controller
                             ->get();
 
         $billingService = app(\App\Services\BillingService::class);
-        $usageStats = $billingService->getUsageStats($user);
-        $usageCheck = $billingService->checkUsageLimits($user, 'carrier');
+        
+        // Tratamento seguro para usageStats e usageCheck
+        try {
+            $usageStats = $billingService->getUsageStats($user);
+            $usageCheck = $billingService->checkUsageLimits($user, 'carrier');
+        } catch (\Exception $e) {
+            // Log do erro mas não quebra a aplicação
+            Log::warning('Erro ao obter usage stats no DashboardController: ' . $e->getMessage());
+            $usageStats = null;
+            $usageCheck = ['allowed' => true];
+        }
 
         return view("dashboard", compact(
             "total_carriers",
