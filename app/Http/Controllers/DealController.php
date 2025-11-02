@@ -18,8 +18,9 @@ class DealController extends Controller
         // Buscar apenas deals do dispatcher do usuário logado
         $dispatcher = Dispatcher::where('user_id', Auth::id())->first();
         
+        // Sempre retornar uma paginação, mesmo que vazia
         if (!$dispatcher) {
-            $deals = collect();
+            $deals = Deal::whereRaw('1 = 0')->paginate(10); // Query que não retorna resultados
         } else {
             $deals = Deal::with(['dispatcher.user', 'carrier.user'])
                 ->where('dispatcher_id', $dispatcher->id)
