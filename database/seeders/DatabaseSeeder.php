@@ -12,11 +12,17 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // \App\Models\User::factory(10)->create();
+        // Ordem de execução dos seeders:
+        // 1. Plans (valores fixos de planos)
+        // 2. Roles (valores fixos de roles)
+        // 3. Permissions (valores fixos de permissions)
+        // 4. AdminUser (usuários admin - depende de Roles e Permissions)
 
-        // \App\Models\User::factory()->create([
-        //     'name' => 'Test User',
-        //     'email' => 'test@example.com',
-        // ]);
+        $this->call([
+            PlansSeeder::class,
+            RolesSeeder::class,
+            PermissionsSeeder::class,
+            AdminUserSeeder::class,
+        ]);
     }
 }
