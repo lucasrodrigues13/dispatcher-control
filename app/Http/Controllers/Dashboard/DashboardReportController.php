@@ -167,7 +167,7 @@ class DashboardReportController extends Controller
         $data = [];
 
         foreach ($commissions as $c) {
-            $employee = DB::table('employees')->where('id', $c->employee_id)->value('user_id');
+            $employee = DB::table('employees')->where('id', $c->employee_id)->value('name');
             $labels[] = $employee ?? 'Desconhecido';
             $data[] = $c->total;
         }

@@ -13,7 +13,6 @@ class Employee extends Model
 
     protected $fillable = [
         'dispatcher_id',
-        'user_id',
         'name',
         'email',
         'phone',
@@ -22,14 +21,6 @@ class Employee extends Model
         'created_at',
         'updated_at'
     ];
-
-    /**
-     * Relacionamento com User
-     */
-    public function user()
-    {
-        return $this->belongsTo(\App\Models\User::class);
-    }
     
     /**
      * Relacionamento com Dispatcher
@@ -39,40 +30,5 @@ class Employee extends Model
         return $this->belongsTo(\App\Models\Dispatcher::class);
     }
 
-    /**
-     * Accessor para retornar o nome do usuário associado
-     */
-    public function getUserNameAttribute()
-    {
-        // Se não há user_id, retorna null
-        if (!$this->user_id) {
-            return null;
-        }
-        
-        // Carrega o relacionamento se não estiver carregado
-        if (!$this->relationLoaded('user')) {
-            $this->load('user');
-        }
-        
-        return $this->user ? $this->user->name : null;
-    }
-
-    /**
-     * Accessor para retornar o email do usuário associado
-     */
-    public function getUserEmailAttribute()
-    {
-        // Se não há user_id, retorna null
-        if (!$this->user_id) {
-            return null;
-        }
-        
-        // Carrega o relacionamento se não estiver carregado
-        if (!$this->relationLoaded('user')) {
-            $this->load('user');
-        }
-        
-        return $this->user ? $this->user->email : null;
-    }
 }
 

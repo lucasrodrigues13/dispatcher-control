@@ -60,12 +60,28 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function employees()
     {
-        return $this->hasMany(Employee::class);
+        // Employees são relacionados através do dispatcher
+        return $this->hasManyThrough(
+            Employee::class,
+            Dispatcher::class,
+            'user_id',        // FK em dispatchers → user
+            'dispatcher_id',  // FK em employees → dispatcher
+            'id',             // PK em users
+            'id'              // PK em dispatchers
+        );
     }
 
     public function drivers()
     {
-        return $this->hasMany(Driver::class);
+        // Drivers são relacionados através dos carriers
+        return $this->hasManyThrough(
+            Driver::class,
+            Carrier::class,
+            'user_id',        // FK em carriers → user
+            'carrier_id',     // FK em drivers → carrier
+            'id',             // PK em users
+            'id'              // PK em carriers
+        );
     }
 
     public function dispatchers()

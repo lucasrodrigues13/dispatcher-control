@@ -31,7 +31,7 @@ class EmployeeController extends Controller
             $employeers = Employee::whereRaw('1 = 0')->paginate(10);
         } else {
             // Filtra os employees pelo dispatcher_id
-            $employeers = Employee::with('user', 'dispatcher.user')
+            $employeers = Employee::with('dispatcher.user')
                 ->where('dispatcher_id', $dispatchers->id)
                 ->paginate(10);
         }
@@ -64,7 +64,7 @@ class EmployeeController extends Controller
         // 1) Validação dos dados
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
+            'email' => 'required|email|unique:employees,email',
             'dispatcher_id' => 'required|exists:dispatchers,id',
             'phone' => 'nullable|string|max:255',
             'position' => 'nullable|string|max:255',
@@ -79,24 +79,10 @@ class EmployeeController extends Controller
                 ->withInput();
         }
 
-        $base = \Illuminate\Support\Str::of($request->input('name'))
-            ->lower()
-            ->ascii()
-            ->replaceMatches('/[^a-z0-9]+/', '');
-        $plainPassword = (string) $base.'2025';
-
-        // 3) Cria o usuário
-        $user = User::create([
-            'name'     => $request->name,
-            'email'    => $request->email,
-            'password' => Hash::make($plainPassword), // Usa a senha gerada automaticamente
-            'must_change_password' => true,
-            'email_verified_at' => now(),
-        ]);
-
         Employee::create([
-            'user_id'       => $user->id,
             'dispatcher_id' => $request->dispatcher_id,
+            'name'          => $request->name,
+            'email'         => $request->email,
             'phone'         => $request->phone ?? null,
             'position'      => $request->position ?? null,
             'ssn_tax_id'    => $request->ssn_tax_id ?? null,
@@ -104,17 +90,9 @@ class EmployeeController extends Controller
 
         app(UsageTrackingRepository::class)->incrementUsage(Auth::user(), 'employee');
 
-        Mail::to($user->email)->queue(new NewCarrierCredentialsMail($user, $plainPassword));
-
-        if ($request->register_type === "auth_register") {
-            event(new Registered($user));
-            Auth::login($user);
-            return redirect(RouteServiceProvider::HOME);
-        }
-
         return redirect()
             ->route('employees.index')
-            ->with('success', 'Employee e usuário criados com sucesso; credenciais enviadas por e-mail.');
+            ->with('success', 'Employee criado com sucesso!');
     }
 
     /**
@@ -122,13 +100,13 @@ class EmployeeController extends Controller
      */
     public function edit($id)
     {
-        $employee    = Employee::with('user')->findOrFail($id);
+        $employee    = Employee::findOrFail($id);
         $dispatchers = Dispatcher::with('user')->get();
         return view('dispatcher.employeer.edit', compact('employee', 'dispatchers'));
     }
 
     public function getEmployee($id) {
-        $employees    = Employee::with('user')->where("dispatcher_id", $id)->get();
+        $employees = Employee::where("dispatcher_id", $id)->get();
 
         return response()->json($employees);
     }
@@ -139,32 +117,21 @@ class EmployeeController extends Controller
     public function update(Request $request, $id)
     {
         $employee = Employee::findOrFail($id);
-        $user     = $employee->user;
 
         // Validação
         $data = $request->validate([
-            // usuário
             'name'                  => 'required|string|max:255',
-            'email'                 => "required|email|unique:users,email,{$user->id}",
-            'password'              => 'nullable|string|min:8|confirmed',
-            // employee
+            'email'                 => "required|email|unique:employees,email,{$employee->id}",
             'dispatcher_id'         => 'required|exists:dispatchers,id',
             'phone'                 => 'nullable|string|max:255',
             'position'              => 'nullable|string|max:255',
             'ssn_tax_id'            => 'nullable|string|max:255',
         ]);
 
-        // Atualiza usuário
-        $user->update([
-            'name'     => $data['name'],
-            'email'    => $data['email'],
-            'password' => $data['password']
-                ? Hash::make($data['password'])
-                : $user->password,
-        ]);
-
         // Atualiza employee
         $employee->update([
+            'name'          => $data['name'],
+            'email'         => $data['email'],
             'dispatcher_id' => $data['dispatcher_id'],
             'phone'         => $data['phone'] ?? null,
             'position'      => $data['position'] ?? null,
@@ -182,8 +149,6 @@ class EmployeeController extends Controller
     public function destroy($id)
     {
         $employee = Employee::findOrFail($id);
-        // opcional: você pode querer deletar também o usuário associado:
-        // $employee->user()->delete();
         $employee->delete();
 
         return redirect()

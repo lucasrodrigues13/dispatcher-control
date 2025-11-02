@@ -260,13 +260,12 @@ class CommissionController extends Controller
             $employees = collect();
         } else {
             // Mostrar apenas employees do dispatcher logado
-            $employees = Employee::with('user')
-                ->where('dispatcher_id', $dispatcher->id)
+            $employees = Employee::where('dispatcher_id', $dispatcher->id)
                 ->get()
                 ->map(function($employee) {
                     return [
-                        'id' => $employee->user_id,
-                        'name' => $employee->user->name ?? 'N/A'
+                        'id' => $employee->id,
+                        'name' => $employee->name ?? 'N/A'
                     ];
                 });
         }

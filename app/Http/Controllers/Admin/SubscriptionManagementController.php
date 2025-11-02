@@ -198,24 +198,11 @@ class SubscriptionManagementController extends Controller
     }
     
     /**
-     * Adiciona sub-usuários (employees, drivers) relacionados a um usuário principal
+     * Adiciona sub-usuários (drivers) relacionados a um usuário principal
+     * Nota: Employees não têm login próprio, então não aparecem como usuários separados
      */
     private function addSubUsers($mainUser, $allUsers, &$organized, &$processedUsers, $level)
     {
-        // Adicionar employees
-        foreach ($mainUser->employees as $employee) {
-            $employeeUser = $allUsers->find($employee->user_id);
-            if ($employeeUser && !in_array($employeeUser->id, $processedUsers)) {
-                $empArray = $employeeUser->toArray();
-                $empArray['user_type'] = 'sub';
-                $empArray['role_name'] = 'Employee';
-                $empArray['level'] = $level;
-                $empArray['parent_name'] = $mainUser->name;
-                $organized[] = $empArray;
-                $processedUsers[] = $employeeUser->id;
-            }
-        }
-        
         // Adicionar drivers
         foreach ($mainUser->drivers as $driver) {
             $driverUser = $allUsers->find($driver->user_id);
