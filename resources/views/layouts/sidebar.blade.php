@@ -20,7 +20,7 @@
 
         {{-- Dashboard --}}
         @can('pode_visualizar_dashboard')
-        <li class="nav-item {{ request()->is('dashboard') ? 'active' : '' }}">
+        <li class="nav-item {{ request()->is('dashboard') || request()->routeIs('dashboard*') ? 'active' : '' }}">
           <a href="/dashboard">
             <i class="fas fa-home"></i><p>Dashboard</p>
           </a>
@@ -33,43 +33,49 @@
         </li>
 
         {{-- Users --}}
-        <li class="nav-item">
-          <a data-bs-toggle="collapse" href="#users">
+        @php
+            $isUsersActive = request()->is('dispatchers*') || request()->is('employees*') || request()->is('carriers*') || request()->is('drivers*') || request()->is('brokers*');
+        @endphp
+        <li class="nav-item {{ $isUsersActive ? 'active' : '' }}">
+          <a data-bs-toggle="collapse" href="#users" class="{{ $isUsersActive ? '' : 'collapsed' }}" aria-expanded="{{ $isUsersActive ? 'true' : 'false' }}">
             <i class="fas fa-users"></i><p>Users</p><span class="caret"></span>
           </a>
-          <div class="collapse" id="users">
+          <div class="collapse {{ $isUsersActive ? 'show' : '' }}" id="users">
             <ul class="nav nav-collapse">
               @can('pode_visualizar_dispatchers')
-              <li><a href="/dispatchers"><span class="sub-item">Dispatchers</span></a></li>
+              <li class="{{ request()->is('dispatchers*') ? 'active' : '' }}"><a href="/dispatchers"><span class="sub-item">Dispatchers</span></a></li>
               @endcan
               @can('pode_visualizar_employees')
-              <li><a href="/employees"><span class="sub-item">Employees</span></a></li>
+              <li class="{{ request()->is('employees*') ? 'active' : '' }}"><a href="/employees"><span class="sub-item">Employees</span></a></li>
               @endcan
               @can('pode_visualizar_carriers')
-              <li><a href="/carriers"><span class="sub-item">Carriers</span></a></li>
+              <li class="{{ request()->is('carriers*') ? 'active' : '' }}"><a href="/carriers"><span class="sub-item">Carriers</span></a></li>
               @endcan
               @can('pode_visualizar_drivers')
-              <li><a href="/drivers"><span class="sub-item">Drivers</span></a></li>
+              <li class="{{ request()->is('drivers*') ? 'active' : '' }}"><a href="/drivers"><span class="sub-item">Drivers</span></a></li>
               @endcan
               @can('pode_visualizar_brokers')
-              <li><a href="/brokers"><span class="sub-item">Brokers</span></a></li>
+              <li class="{{ request()->is('brokers*') ? 'active' : '' }}"><a href="/brokers"><span class="sub-item">Brokers</span></a></li>
               @endcan
             </ul>
           </div>
         </li>
 
         {{-- Agreements --}}
-        <li class="nav-item">
-          <a data-bs-toggle="collapse" href="#agreements">
+        @php
+            $isAgreementsActive = request()->is('deals*') || request()->is('commissions*');
+        @endphp
+        <li class="nav-item {{ $isAgreementsActive ? 'active' : '' }}">
+          <a data-bs-toggle="collapse" href="#agreements" class="{{ $isAgreementsActive ? '' : 'collapsed' }}" aria-expanded="{{ $isAgreementsActive ? 'true' : 'false' }}">
             <i class="fas fa-handshake"></i><p>Agreements</p><span class="caret"></span>
           </a>
-          <div class="collapse" id="agreements">
+          <div class="collapse {{ $isAgreementsActive ? 'show' : '' }}" id="agreements">
             <ul class="nav nav-collapse">
               @can('pode_visualizar_deals')
-              <li><a href="/deals"><span class="sub-item">Deals</span></a></li>
+              <li class="{{ request()->is('deals*') ? 'active' : '' }}"><a href="/deals"><span class="sub-item">Deals</span></a></li>
               @endcan
               @can('pode_visualizar_commissions')
-              <li><a href="/commissions"><span class="sub-item">Commissions</span></a></li>
+              <li class="{{ request()->is('commissions*') ? 'active' : '' }}"><a href="/commissions"><span class="sub-item">Commissions</span></a></li>
               @endcan
             </ul>
           </div>
@@ -77,40 +83,46 @@
 
         {{-- Loads --}}
         @can('pode_visualizar_loads')
-        <li class="nav-item">
+        <li class="nav-item {{ request()->is('loads*') ? 'active' : '' }}">
           <a href="/loads"><i class="fas fa-th-list"></i><p>Loads</p></a>
         </li>
         @endcan
 
         {{-- Invoices --}}
-        <li class="nav-item">
-          <a data-bs-toggle="collapse" href="#invoices">
+        @php
+            $isInvoicesActive = request()->is('invoices*') || request()->is('charges_setups*');
+        @endphp
+        <li class="nav-item {{ $isInvoicesActive ? 'active' : '' }}">
+          <a data-bs-toggle="collapse" href="#invoices" class="{{ $isInvoicesActive ? '' : 'collapsed' }}" aria-expanded="{{ $isInvoicesActive ? 'true' : 'false' }}">
             <i class="fas fa-file-invoice"></i><p>Invoices</p><span class="caret"></span>
           </a>
-          <div class="collapse" id="invoices">
+          <div class="collapse {{ $isInvoicesActive ? 'show' : '' }}" id="invoices">
             <ul class="nav nav-collapse">
               @can('pode_visualizar_invoices.create')
-              <li><a href="/invoices/add"><span class="sub-item">New Invoice</span></a></li>
+              <li class="{{ request()->is('invoices/add*') || request()->is('invoices/create*') ? 'active' : '' }}"><a href="/invoices/add"><span class="sub-item">New Invoice</span></a></li>
               @endcan
               @can('pode_visualizar_invoices.index')
-              <li><a href="/invoices/list"><span class="sub-item">Time Line Charges</span></a></li>
+              <li class="{{ request()->is('invoices/list*') || (request()->is('invoices*') && !request()->is('invoices/add*') && !request()->is('invoices/create*')) ? 'active' : '' }}"><a href="/invoices/list"><span class="sub-item">Time Line Charges</span></a></li>
               @endcan
               @can('pode_visualizar_charges_setups.index')
-              <li><a href="/charges_setups/list"><span class="sub-item">Charge Setup</span></a></li>
+              <li class="{{ request()->is('charges_setups*') ? 'active' : '' }}"><a href="/charges_setups/list"><span class="sub-item">Charge Setup</span></a></li>
               @endcan
             </ul>
           </div>
         </li>
 
         {{-- Reports --}}
-        <li class="nav-item">
-            <a data-bs-toggle="collapse" href="#reports">
+        @php
+            $isReportsActive = request()->is('reports*') || request()->is('report*');
+        @endphp
+        <li class="nav-item {{ $isReportsActive ? 'active' : '' }}">
+            <a data-bs-toggle="collapse" href="#reports" class="{{ $isReportsActive ? '' : 'collapsed' }}" aria-expanded="{{ $isReportsActive ? 'true' : 'false' }}">
                 <i class="fas fa-chart-bar"></i><p>Reports and Graphics</p><span class="caret"></span>
             </a>
-            <div class="collapse" id="reports">
+            <div class="collapse {{ $isReportsActive ? 'show' : '' }}" id="reports">
                 <ul class="nav nav-collapse">
                     @can('pode_visualizar_invoices.create')
-                    <li><a href="/reports"><span class="sub-item">Reports</span></a></li>
+                    <li class="{{ request()->is('reports*') || request()->is('report*') ? 'active' : '' }}"><a href="/reports"><span class="sub-item">Reports</span></a></li>
                     @endcan
                     {{-- outros relatórios... --}}
                 </ul>
@@ -123,44 +135,47 @@
         </li>
 
         {{-- Subscription Management (NOVO) --}}
+        @php
+            $isSubscriptionsActive = request()->is('admin/subscriptions*');
+        @endphp
         @if(auth()->user()->is_admin ?? false || auth()->user()->roles()->where('name', 'admin')->exists() || in_array(auth()->user()->email, ['alex@abbrtransportandshipping.com']))
-        <li class="nav-item {{ request()->is('admin/subscriptions*') ? 'active' : '' }}">
-          <a data-bs-toggle="collapse" href="#subscriptions">
+        <li class="nav-item {{ $isSubscriptionsActive ? 'active' : '' }}">
+          <a data-bs-toggle="collapse" href="#subscriptions" class="{{ $isSubscriptionsActive ? '' : 'collapsed' }}" aria-expanded="{{ $isSubscriptionsActive ? 'true' : 'false' }}">
             <i class="fas fa-credit-card"></i><p>Subscription Management</p><span class="caret"></span>
           </a>
-          <div class="collapse {{ request()->is('admin/subscriptions*') ? 'show' : '' }}" id="subscriptions">
+          <div class="collapse {{ $isSubscriptionsActive ? 'show' : '' }}" id="subscriptions">
             <ul class="nav nav-collapse">
-              <li class="{{ request()->is('admin/subscriptions') ? 'active' : '' }}">
+              <li class="{{ request()->is('admin/subscriptions') && !request()->has('status') ? 'active' : '' }}">
                 <a href="{{ route('admin.subscriptions.index') }}">
                   <i class="fas fa-list"></i>
                   <span class="sub-item">All Subscriptions</span>
                 </a>
               </li>
-              <li>
+              <li class="{{ request()->is('admin/subscriptions') && request()->get('status') == 'active' ? 'active' : '' }}">
                 <a href="{{ route('admin.subscriptions.index', ['status' => 'active']) }}">
                   <i class="fas fa-check-circle text-success"></i>
                   <span class="sub-item">Active Users</span>
                 </a>
               </li>
-              <li>
+              <li class="{{ request()->is('admin/subscriptions') && request()->get('status') == 'trial' ? 'active' : '' }}">
                 <a href="{{ route('admin.subscriptions.index', ['status' => 'trial']) }}">
                   <i class="fas fa-clock text-warning"></i>
                   <span class="sub-item">Trial Users</span>
                 </a>
               </li>
-              <li>
+              <li class="{{ request()->is('admin/subscriptions') && request()->get('status') == 'blocked' ? 'active' : '' }}">
                 <a href="{{ route('admin.subscriptions.index', ['status' => 'blocked']) }}">
                   <i class="fas fa-ban text-danger"></i>
                   <span class="sub-item">Blocked Users</span>
                 </a>
               </li>
-              <li>
+              <li class="{{ request()->is('admin/subscriptions') && request()->get('status') == 'expired' ? 'active' : '' }}">
                 <a href="{{ route('admin.subscriptions.index', ['status' => 'expired']) }}">
                   <i class="fas fa-times-circle text-secondary"></i>
                   <span class="sub-item">Expired Users</span>
                 </a>
               </li>
-              <li>
+              <li class="{{ request()->is('admin/subscriptions/export*') ? 'active' : '' }}">
                 <a href="{{ route('admin.subscriptions.export') }}">
                   <i class="fas fa-download text-info"></i>
                   <span class="sub-item">Export Data</span>
@@ -172,22 +187,25 @@
         @endif
 
         {{-- Administrator (Permissions & Roles) --}}
+        @php
+            $isAdministratorActive = request()->is('permissions_roles*') || request()->is('roles_users*');
+        @endphp
         @can('pode_visualizar_permissions_roles')
-        <li class="nav-item">
-          <a class="nav-main-link nav-main-link-submenu" data-bs-toggle="collapse" href="#administrator" aria-expanded="false">
+        <li class="nav-item {{ $isAdministratorActive ? 'active' : '' }}">
+          <a class="nav-main-link nav-main-link-submenu {{ $isAdministratorActive ? '' : 'collapsed' }}" data-bs-toggle="collapse" href="#administrator" aria-expanded="{{ $isAdministratorActive ? 'true' : 'false' }}">
             <i class="fa fa-paste"></i><p>Administrator</p><span class="caret"></span>
           </a>
-          <div class="collapse" id="administrator">
+          <div class="collapse {{ $isAdministratorActive ? 'show' : '' }}" id="administrator">
             <ul class="nav nav-collapse">
               @can('pode_visualizar_permissions_roles')
-              <li>
+              <li class="{{ request()->is('permissions_roles*') ? 'active' : '' }}">
                 <a href="/permissions_roles">
                   <i class="fa fa-lock"></i><span class="sub-item">Permissions and Roles</span>
                 </a>
               </li>
               @endcan
               @can('pode_visualizar_roles_users')
-              <li>
+              <li class="{{ request()->is('roles_users*') ? 'active' : '' }}">
                 <a href="/roles_users">
                   <i class="fa fa-user-lock"></i><span class="sub-item">Roles and Users</span>
                 </a>
