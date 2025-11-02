@@ -575,7 +575,7 @@
                       </li>
                       <li>
                         <div class="dropdown-divider"></div>
-                        <a class="dropdown-item" href="{{ route('profile') }}">My Profile</a>
+                        <a class="dropdown-item" href="{{ route('profile.edit') }}">My Profile</a>
                         <a class="dropdown-item" href="#" id="logout-link">Logout</a>
                         <!--
                         <a class="dropdown-item" href="#">My Balance</a>

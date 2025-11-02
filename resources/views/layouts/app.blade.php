@@ -378,11 +378,11 @@
                       </li>
                       <li>
                         @if(session('warning'))
-                            <a class="dropdown-item" href="{{ route('profile') }}">
+                            <a class="dropdown-item" href="{{ route('profile.edit') }}">
                                 My Profile <span class="text-danger big-exclamation">!</span>
                             </a>
                         @else
-                            <a class="dropdown-item" href="{{ route('profile') }}">My Profile</a>
+                            <a class="dropdown-item" href="{{ route('profile.edit') }}">My Profile</a>
                         @endif
                         <a class="dropdown-item" href="#" id="logout-link">Logout</a>
                         <!--

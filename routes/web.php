@@ -39,7 +39,7 @@ Route::post('/logout', function () {
     request()->session()->invalidate();
     request()->session()->regenerateToken();
     return response()->json(['message' => 'Logged out']);
-})->name('logout');
+})->name('logout.api');
 
 
 
@@ -55,33 +55,21 @@ Route::get('/email-exists', function (Illuminate\Http\Request $request) {
 
 Route::middleware('auth')->group(function () {
 
-
-    // Dashboard Routes
-    Route::get('/reports', [ReportController::class, 'index'])->name('report');
-    Route::get('/reports/chart-data', [ReportController::class, 'getChartData'])->name('report.chart-data');
-
-    // Alternative routes for different sections (optional)
+    // Dashboard Routes - Reports
     Route::prefix('report')->name('report.')->group(function () {
         Route::get('/', [ReportController::class, 'index'])->name('index');
         Route::get('/export', [ReportController::class, 'export'])->name('export');
         Route::get('/chart-data', [ReportController::class, 'getChartData'])->name('chart-data');
     });
+    
+    // Alias para compatibilidade com rotas antigas usando /reports
+    Route::get('/reports', [ReportController::class, 'index'])->name('report');
 
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     Route::post('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password.update');
-
-    Route::get('/profile', function () {
-        return view('profile', ['user' => auth()->user()]);
-    })->name('profile');
-
-    // Rota de logout explícita (opcional)
-    Route::post('/logout', function () {
-        Auth::logout();
-        return redirect('/');
-    })->name('logout');
 });
 
 // Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard.index');
