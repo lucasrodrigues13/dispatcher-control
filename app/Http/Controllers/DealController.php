@@ -97,8 +97,7 @@ class DealController extends Controller
         // Criar o Deal
         Deal::create($validated);
 
-        // Redirecionar com sucesso (opcional)
-        return redirect()->back()->with('success', 'Deal criado com sucesso.');
+        return redirect()->route('deals.index')->with('success', 'Deal criado com sucesso!');
     }
 
     /**

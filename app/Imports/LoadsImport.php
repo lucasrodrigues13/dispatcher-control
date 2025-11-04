@@ -7,12 +7,10 @@ use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\WithValidation;
 use Maatwebsite\Excel\Concerns\Importable;
-use Maatwebsite\Excel\Concerns\WithBatchInserts;
-use Maatwebsite\Excel\Concerns\WithChunkReading;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
-class LoadsImport implements ToModel, WithHeadingRow, WithValidation, WithBatchInserts, WithChunkReading
+class LoadsImport implements ToModel, WithHeadingRow, WithValidation
 {
     use Importable;
 
@@ -248,22 +246,42 @@ class LoadsImport implements ToModel, WithHeadingRow, WithValidation, WithBatchI
                 'status_move' => 'no_moved',
             ];
 
-            // ⭐ CRITICAL FIX: Only include fields that have values and exist in the fillable array
+            // ⭐ CRITICAL FIX: Only include fields that have values and exist in the fillable array AND database
             $fillableFields = (new Load)->getFillable();
             $cleanData = [];
+            
+            // Verificar quais colunas realmente existem no banco
+            $tableColumns = Schema::getColumnListing('loads');
 
             foreach ($data as $key => $value) {
-                // Only include if field is fillable and has a non-null value
-                if (in_array($key, $fillableFields)) {
-                    $cleanData[$key] = $value;
+                // Only include if field is fillable AND column exists in database
+                if (in_array($key, $fillableFields) && in_array($key, $tableColumns)) {
+                    // Sempre incluir carrier_id e dispatcher_id mesmo se null
+                    if (in_array($key, ['carrier_id', 'dispatcher_id']) || $value !== null) {
+                        $cleanData[$key] = $value;
+                    }
                 }
             }
 
             // ⭐ VERIFICATION: load_id is mandatory
             if (empty($cleanData['load_id'])) {
                 self::$errorCount++;
-                Log::warning("Linha " . self::$processedCount . " - load_id vazio, pulando");
+                Log::warning("Linha " . self::$processedCount . " - load_id vazio, pulando. Dados da linha:", [
+                    'campos_disponiveis' => array_keys($row),
+                    'primeiros_valores' => array_slice($row, 0, 5, true)
+                ]);
                 return null;
+            }
+
+            // Garantir que carrier_id e dispatcher_id estão presentes
+            if (!isset($cleanData['carrier_id'])) {
+                $cleanData['carrier_id'] = $this->carrierId;
+            }
+            if (!isset($cleanData['dispatcher_id'])) {
+                $cleanData['dispatcher_id'] = $this->dispatcherId;
+            }
+            if (!isset($cleanData['employee_id']) && $this->employeeId) {
+                $cleanData['employee_id'] = $this->employeeId;
             }
 
             // Debug das primeiras linhas
@@ -279,14 +297,33 @@ class LoadsImport implements ToModel, WithHeadingRow, WithValidation, WithBatchI
 
             if ($existingLoad) {
                 // ⭐ FIX: Update existing record directly instead of through batch
-                $existingLoad->update($cleanData);
-                self::$updatedCount++;
+                try {
+                    $existingLoad->update($cleanData);
+                    self::$updatedCount++;
+                } catch (\Exception $e) {
+                    self::$errorCount++;
+                    Log::error("Erro ao atualizar load_id {$cleanData['load_id']}:", [
+                        'erro' => $e->getMessage(),
+                        'dados' => $cleanData
+                    ]);
+                }
                 return null; // Don't return model for batch insert
             }
 
-            // Criar novo
-            self::$createdCount++;
-            return new Load($cleanData);
+            // Criar novo - usar create() para garantir que salve
+            try {
+                $newLoad = Load::create($cleanData);
+                self::$createdCount++;
+                return null; // Retornar null porque já foi criado
+            } catch (\Exception $e) {
+                self::$errorCount++;
+                Log::error("Erro ao criar load_id {$cleanData['load_id']}:", [
+                    'erro' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                    'dados' => $cleanData
+                ]);
+                return null;
+            }
 
         } catch (\Exception $e) {
             self::$errorCount++;
@@ -505,18 +542,6 @@ class LoadsImport implements ToModel, WithHeadingRow, WithValidation, WithBatchI
         ];
     }
 
-    /**
-     * ⭐ REDUCED: Much smaller batch size to prevent SQL issues
-     */
-    public function batchSize(): int
-    {
-        return 5; // Very small to prevent column mismatch issues
-    }
-
-    public function chunkSize(): int
-    {
-        return 5;
-    }
 
     /**
      * Final statistics log

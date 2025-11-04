@@ -112,11 +112,11 @@
                                 </div>
 
                                 <div class="col-md-6 mb-3">
-                                    <label for="dispatcher_company_id" class="form-label">Dispatcher</label>
+                                    <label for="dispatcher_id" class="form-label">Dispatcher</label>
 
                                     @if($dispatchers)
                                         {{-- Envia o ID oculto no POST --}}
-                                        <input type="hidden" name="dispatcher_company_id" value="{{ $dispatchers->id }}">
+                                        <input type="hidden" name="dispatcher_id" value="{{ $dispatchers->id }}">
 
                                         {{-- Mostra apenas o nome do dispatcher logado --}}
                                         <input type="text" class="form-control" value="{{ $dispatchers->user->name }}" readonly>

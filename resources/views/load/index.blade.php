@@ -222,7 +222,7 @@
                                 @forelse ($employees as $employee)
                                     <option value="{{ $employee->id }}"
                                         {{ (int) $load->employee_id === (int) $employee->id ? 'selected' : '' }}>
-                                        {{ $employee->user->name ?? ('ID '.$employee->id) }}
+                                        {{ $employee->name ?? ('ID '.$employee->id) }}
                                     </option>
                                 @empty
                                     <option value="" disabled>No employees found</option>
@@ -468,7 +468,7 @@
                 <option value="">Select Employee</option>
                 @forelse ($employees as $employee)
                     <option value="{{ $employee->id }}">
-                        {{ $employee->user->name ?? ('ID '.$employee->id) }}
+                        {{ $employee->name ?? ('ID '.$employee->id) }}
                     </option>
                 @empty
                     <option value="" disabled>No employees found</option>
@@ -651,32 +651,37 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
 <script>
-document.getElementById('delete-all-loads').addEventListener('click', function (e) {
-    e.preventDefault();
+document.addEventListener('DOMContentLoaded', function() {
+  const deleteAllBtn = document.getElementById('delete-all-loads');
+  if (deleteAllBtn) {
+    deleteAllBtn.addEventListener('click', function (e) {
+      e.preventDefault();
 
-    if (!confirm('Tem certeza que deseja excluir todas as cargas?')) return;
+      if (!confirm('Tem certeza que deseja excluir todas as cargas?')) return;
 
-    fetch("{{ route('loads.destroyAll') }}", {
+      fetch("{{ route('loads.destroyAll') }}", {
         method: "DELETE",
         headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': '{{ csrf_token() }}',
-            'Accept': 'application/json'
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': '{{ csrf_token() }}',
+          'Accept': 'application/json'
         }
-    })
-    .then(response => {
+      })
+      .then(response => {
         if (!response.ok) throw new Error('Erro ao excluir');
         return response.json();
-    })
-    .then(data => {
+      })
+      .then(data => {
         alert(data.message);
         // Recarrega a tabela ou redireciona
         location.reload();
-    })
-    .catch(error => {
+      })
+      .catch(error => {
         alert('Erro ao excluir cargas');
         console.error(error);
+      });
     });
+  }
 });
 </script>
 
@@ -767,77 +772,94 @@ document.getElementById('delete-all-loads').addEventListener('click', function (
 
 <!-- Pesquisa dinamica -->
 <script>
-  document.getElementById('searchColumnsInput').addEventListener('input', function () {
-    const searchTerm = this.value.toLowerCase();
-    const checkboxes = document.querySelectorAll('#selectColums .toggle-column');
+  const searchColumnsInput = document.getElementById('searchColumnsInput');
+  if (searchColumnsInput) {
+    searchColumnsInput.addEventListener('input', function () {
+      const searchTerm = this.value.toLowerCase();
+      const checkboxes = document.querySelectorAll('#selectColums .toggle-column');
 
-    checkboxes.forEach(function (checkbox) {
-      const label = checkbox.closest('label');
-      const container = checkbox.closest('.col-md-6');
+      checkboxes.forEach(function (checkbox) {
+        const label = checkbox.closest('label');
+        const container = checkbox.closest('.col-md-6');
 
-      if (label.textContent.toLowerCase().includes(searchTerm)) {
-        container.style.display = 'block';
-      } else {
-        container.style.display = 'none';
-      }
+        if (label && container) {
+          if (label.textContent.toLowerCase().includes(searchTerm)) {
+            container.style.display = 'block';
+          } else {
+            container.style.display = 'none';
+          }
+        }
+      });
     });
-  });
+  }
 </script>
 
 <!-- Script de seleção e exclusão -->
 <script>
+document.addEventListener('DOMContentLoaded', function() {
   // Checkbox mestre
-  document.getElementById('select-all').addEventListener('change', function () {
-    document.querySelectorAll('.load-checkbox').forEach(cb => cb.checked = this.checked);
-  });
+  const selectAll = document.getElementById('select-all');
+  if (selectAll) {
+    selectAll.addEventListener('change', function () {
+      document.querySelectorAll('.load-checkbox').forEach(cb => cb.checked = this.checked);
+    });
+  }
 
   // Botão de exclusão
-  document.getElementById('delete-selected').addEventListener('click', function () {
-    const ids = Array.from(document.querySelectorAll('.load-checkbox:checked')).map(cb => cb.value);
+  const deleteSelected = document.getElementById('delete-selected');
+  if (deleteSelected) {
+    deleteSelected.addEventListener('click', function () {
+      const ids = Array.from(document.querySelectorAll('.load-checkbox:checked')).map(cb => cb.value);
 
-    if (ids.length === 0) {
-      alert('Selecione pelo menos um registro.');
-      return;
-    }
-
-    if (!confirm('Are you sure you want to delete the selected records?')) return;
-
-    fetch("{{ route('loads.apagar_varios') }}", {
-      method: 'POST',
-      headers: {
-        'X-CSRF-TOKEN': '{{ csrf_token() }}',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ ids })
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        // alert('Registros apagados com sucesso!');
-        console.log("Registros apagados com sucesso!")
-        location.reload();
-      } else {
-        alert('Erro ao apagar registros.');
+      if (ids.length === 0) {
+        alert('Selecione pelo menos um registro.');
+        return;
       }
-    })
-    .catch(err => {
-      console.error(err);
-      alert('Erro de comunicação com o servidor.');
+
+      if (!confirm('Are you sure you want to delete the selected records?')) return;
+
+      fetch("{{ route('loads.apagar_varios') }}", {
+        method: 'POST',
+        headers: {
+          'X-CSRF-TOKEN': '{{ csrf_token() }}',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ ids })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          console.log("Registros apagados com sucesso!")
+          location.reload();
+        } else {
+          alert('Erro ao apagar registros.');
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        alert('Erro de comunicação com o servidor.');
+      });
     });
-  });
+  }
+});
 </script>
 
 <script>
-  document.getElementById('toggle-mode-btn').addEventListener('click', function(event) {
-    event.preventDefault();  // impede a navegação imediata
+document.addEventListener('DOMContentLoaded', function() {
+  const toggleModeBtn = document.getElementById('toggle-mode-btn');
+  if (toggleModeBtn) {
+    toggleModeBtn.addEventListener('click', function(event) {
+      event.preventDefault();  // impede a navegação imediata
 
-    const ok = confirm('Do you really want to change the view mode?');
-    if (ok) {
-      // Se confirmar, navega para a URL do href
-      window.location.href = this.href;
-    }
-    // Senão, não faz nada
-  });
+      const ok = confirm('Do you really want to change the view mode?');
+      if (ok) {
+        // Se confirmar, navega para a URL do href
+        window.location.href = this.href;
+      }
+      // Senão, não faz nada
+    });
+  }
+});
 </script>
 
 <!-- Buscar employee -->
@@ -846,30 +868,49 @@ document.getElementById('delete-all-loads').addEventListener('click', function (
     const dispatcherSelect = document.getElementById('dispatcher_id');
     const employeeSelect = document.getElementById('employee_id');
 
+    if (!dispatcherSelect || !employeeSelect) return; // Sair se elementos não existirem
+
     dispatcherSelect.addEventListener('change', function () {
       const dispatcherId = this.value;
 
-      if (!dispatcherId) return;
+      if (!dispatcherId) {
+        employeeSelect.innerHTML = '<option value="" selected>Select Employee</option>';
+        return;
+      }
 
       fetch(`/employees/${dispatcherId}/getEmployee`)
-        .then(response => response.json())
+        .then(response => {
+          if (!response.ok) throw new Error('Erro na requisição');
+          return response.json();
+        })
         .then(data => {
           // Limpa opções anteriores
           employeeSelect.innerHTML = '<option value="" selected>Select Employee</option>';
 
           // Popula com os dados recebidos
-          data.forEach(employee => {
-            const option = document.createElement('option');
-            option.value = employee.id; // ou employee.user_id, dependendo do que você precisa salvar
-            option.textContent = employee.user.name;
-            employeeSelect.appendChild(option);
-          });
+          if (Array.isArray(data)) {
+            data.forEach(employee => {
+              const option = document.createElement('option');
+              option.value = employee.id;
+              option.textContent = employee.name || ('ID ' + employee.id);
+              employeeSelect.appendChild(option);
+            });
+          }
         })
         .catch(error => {
           console.error('Erro ao carregar os funcionários:', error);
           employeeSelect.innerHTML = '<option value="" selected>Erro ao carregar</option>';
         });
     });
+  });
+
+  // Garantir que F5 funcione corretamente
+  document.addEventListener('keydown', function(e) {
+    // Permitir F5 (keyCode 116) ou Ctrl+R (keyCode 82 com Ctrl)
+    if (e.key === 'F5' || (e.key === 'r' && e.ctrlKey)) {
+      // Não fazer preventDefault - permitir o comportamento padrão
+      return true;
+    }
   });
 </script>
 

@@ -18,3 +18,11 @@ yarn-error.log
 /.vscode
 /.env
 .env
+
+# Mailpit database files
+/data/mailpit.db
+/data/mailpit.db-shm
+/data/mailpit.db-wal
+/data/*.db
+/data/*.db-shm
+/data/*.db-wal

@@ -63,7 +63,7 @@
                         </div>
                         <div>{{ $commission->deal->value }}%</div>
                       </td>
-                      <td>{{ $commission->employee->user->name ?? 'N/A' }}</td>
+                      <td>{{ $commission->employee->name ?? 'N/A' }}</td>
                       <td class="text-center">{{ number_format($commission->value, 0, ',', '.') }}%</td>
                       <td class="text-center">
                         <div class="d-flex justify-content-center gap-1">

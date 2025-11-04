@@ -48,7 +48,7 @@ class CommissionController extends Controller
             ->firstOrFail();
 
         // Filtra as comissões apenas do deal e dispatcher logado
-        $commissions = Comission::with(['dispatcher.user', 'deal.carrier.user', 'employee.user'])
+        $commissions = Comission::with(['dispatcher.user', 'deal.carrier.user', 'employee.dispatcher.user'])
             ->where('deal_id', $id)
             ->where('dispatcher_id', $dispatcher->id)
             ->paginate(15);
@@ -78,7 +78,7 @@ class CommissionController extends Controller
             ->get();
         
         // Mostrar apenas employees do dispatcher logado
-        $employees = Employee::with('user')
+        $employees = Employee::with('dispatcher.user')
             ->where('dispatcher_id', $dispatcher->id)
             ->get();
 
@@ -159,7 +159,7 @@ class CommissionController extends Controller
             ->get();
         
         // Mostrar apenas employees do dispatcher logado
-        $employees = Employee::with('user')
+        $employees = Employee::with('dispatcher.user')
             ->where('dispatcher_id', $dispatcher->id)
             ->get();
 

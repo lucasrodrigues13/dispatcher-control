@@ -42,7 +42,7 @@
                                         name="name"
                                         id="name"
                                         class="form-control"
-                                        value="{{ old('name', $employee->user ? $employee->user->name : '') }}"
+                                        value="{{ old('name', $employee->name) }}"
                                         placeholder="Enter full name"
                                         required
                                     >
@@ -57,7 +57,7 @@
                                         name="email"
                                         id="email"
                                         class="form-control"
-                                        value="{{ old('email', $employee->user->email) }}"
+                                        value="{{ old('email', $employee->email) }}"
                                         placeholder="Enter email address"
                                         required
                                     >

@@ -403,7 +403,7 @@ class TimeLineChargeController extends Controller
         }
 
         $loads = $query
-        ->with(['employee.user']) // ← isso carrega o employee e o user relacionado
+        ->with(['employee.dispatcher.user']) // Employee se relaciona com User através do Dispatcher
         ->select('load_id', 'employee_id', $amountType)
         ->get();
 

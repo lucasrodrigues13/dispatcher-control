@@ -11,9 +11,10 @@ class Driver extends Model
 
     protected $fillable = [
         'carrier_id',
+        'name',
         'phone',
         'ssn_tax_id',
-        'user_id',
+        'email',
     ];
 
     /**

@@ -222,7 +222,7 @@
                                 @foreach ($employees as $employee)
                                     <option value="{{ $employee->id }}"
                                         {{ $load->employee_id == $employee->id ? 'selected' : '' }}>
-                                        {{ $employee->user->name }}
+                                        {{ $employee->name }}
                                     </option>
                                 @endforeach
                             </select>
@@ -824,8 +824,8 @@ document.getElementById('delete-all-loads').addEventListener('click', function (
           // Popula com os dados recebidos
           data.forEach(employee => {
             const option = document.createElement('option');
-            option.value = employee.id; // ou employee.user_id, dependendo do que você precisa salvar
-            option.textContent = employee.user.name;
+            option.value = employee.id;
+            option.textContent = employee.name || ('ID ' + employee.id);
             employeeSelect.appendChild(option);
           });
         })

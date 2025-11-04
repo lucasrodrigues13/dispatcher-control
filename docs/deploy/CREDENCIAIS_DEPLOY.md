@@ -4,7 +4,8 @@
 
 ## 🖥️ Servidor
 
-- **IP:** vmi2795941 (já configurado)
+- **IP:** 212.56.34.159 
+- **PW:** G@Vclub2020
 - **Sistema:** Ubuntu 24.04.3 LTS
 - **Web Server:** Apache 2.4.58
 - **PHP:** 8.3.6
@@ -35,10 +36,6 @@
 - **Porta:** `3306`
 
 ## 📁 Diretórios
-
-### Aplicação Antiga
-- **Caminho:** `/var/www/projeto-xambra`
-- **Status:** ❌ Remover/renomear após deploy
 
 ### Aplicação Nova
 - **Caminho:** `/var/www/dispatcher-control`

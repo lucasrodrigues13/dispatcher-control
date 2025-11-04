@@ -28,17 +28,16 @@ class ViewController extends Controller
                 ->orderBy('company_name', 'asc')
                 ->get();
 
-            // Carregar funcionários com relacionamento de usuário
-            $employees = Employee::with(['user:id,name'])
-                ->select('id', 'user_id', 'position', 'dispatcher_id')
-                ->whereHas('user') // Apenas funcionários com usuário associado
+            // Carregar funcionários (Employee não tem user_id direto, apenas dispatcher_id)
+            $employees = Employee::with(['dispatcher.user:id,name'])
+                ->select('id', 'dispatcher_id', 'position', 'name')
                 ->get()
                 ->map(function ($employee) {
                     return (object) [
                         'id' => $employee->id,
-                        'name' => $employee->user->name ?? 'Employee #' . $employee->id,
+                        'name' => $employee->name ?? 'Employee #' . $employee->id,
                         'position' => $employee->position,
-                        'user' => $employee->user
+                        'dispatcher' => $employee->dispatcher
                     ];
                 })
                 ->sortBy('name');

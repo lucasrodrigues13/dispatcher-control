@@ -63,39 +63,60 @@ class BrokerController extends Controller
             ->replaceMatches('/[^a-z0-9]+/', '');
         $plainPassword = (string) $base.'2025';
 
-        // Criar o usuário
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($plainPassword),
-            'must_change_password' => true,
-        ]);
+        try {
+            DB::beginTransaction();
 
-        // Criar o broker com user_id
-        Broker::create([
-            'user_id' => $user->id,
-            'license_number' => $request->license_number ?? null,
-            'company_name' => $request->company_name ?? null,
-            'phone' => $request->phone ?? null,
-            'address' => $request->address ?? null,
-            'notes' => $request->notes ?? null,
-            'accounting_email' => $request->accounting_email ?? null,
-            'accounting_phone_number' => $request->accounting_phone_number ?? null,
-            'fee_percent' => $request->fee_percent ?? null,
-            'payment_terms' => $request->payment_terms ?? null,
-            'payment_method' => $request->payment_method ?? null,
-        ]);
+            // Criar o usuário
+            $user = User::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'password' => Hash::make($plainPassword),
+                'must_change_password' => true,
+            ]);
 
-        // Criar assinatura trial automática
-        $billingService = app(BillingService::class);
-        $billingService->createTrialSubscription($user);
+            // Criar o broker com user_id
+            $broker = Broker::create([
+                'user_id' => $user->id,
+                'license_number' => $request->license_number ?? null,
+                'company_name' => $request->company_name ?? null,
+                'phone' => $request->phone ?? null,
+                'address' => $request->address ?? null,
+                'notes' => $request->notes ?? null,
+                'accounting_email' => $request->accounting_email ?? null,
+                'accounting_phone_number' => $request->accounting_phone_number ?? null,
+                'fee_percent' => $request->fee_percent ?? null,
+                'payment_terms' => $request->payment_terms ?? null,
+                'payment_method' => $request->payment_method ?? null,
+            ]);
 
-        // Atribuir role
-        $role = DB::table('roles')->where('name', 'Broker')->first();
-        $roles = new RolesUsers();
-        $roles->user_id = $user->id;
-        $roles->role_id = $role->id;
-        $roles->save();
+            // Criar assinatura trial automática
+            $billingService = app(BillingService::class);
+            $billingService->createTrialSubscription($user);
+
+            // Atribuir role
+            $role = DB::table('roles')->where('name', 'Broker')->first();
+            if ($role) {
+                $roles = new RolesUsers();
+                $roles->user_id = $user->id;
+                $roles->role_id = $role->id;
+                $roles->save();
+            }
+
+            DB::commit();
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Erro ao criar broker', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'data' => $request->all()
+            ]);
+
+            return redirect()->back()
+                ->withErrors(['error' => 'Erro ao criar broker: ' . $e->getMessage()])
+                ->withInput();
+        }
 
         // Enviar email com credenciais (com tratamento de erro para não quebrar o fluxo)
         try {
@@ -155,28 +176,47 @@ class BrokerController extends Controller
             'payment_method' => 'nullable|string',
         ]);
 
-        // Atualiza o usuário
-        $user->update([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => !empty($validated['password']) ? Hash::make($validated['password']) : $user->password,
-        ]);
+        try {
+            DB::beginTransaction();
 
-        // Atualiza o broker
-        $broker->update([
-            'license_number' => $validated['license_number'] ?? null,
-            'company_name' => $validated['company_name'] ?? null,
-            'phone' => $validated['phone'] ?? null,
-            'address' => $validated['address'] ?? null,
-            'notes' => $validated['notes'] ?? null,
-            'accounting_email' => $validated['accounting_email'] ?? null,
-            'accounting_phone_number' => $validated['accounting_phone_number'] ?? null,
-            'fee_percent' => $validated['fee_percent'] ?? null,
-            'payment_terms' => $validated['payment_terms'] ?? null,
-            'payment_method' => $validated['payment_method'] ?? null,
-        ]);
+            // Atualiza o usuário
+            $user->update([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => !empty($validated['password']) ? Hash::make($validated['password']) : $user->password,
+            ]);
 
-        return redirect()->route('brokers.index')->with('success', 'Broker updated successfully.');
+            // Atualiza o broker
+            $broker->update([
+                'license_number' => $validated['license_number'] ?? null,
+                'company_name' => $validated['company_name'] ?? null,
+                'phone' => $validated['phone'] ?? null,
+                'address' => $validated['address'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+                'accounting_email' => $validated['accounting_email'] ?? null,
+                'accounting_phone_number' => $validated['accounting_phone_number'] ?? null,
+                'fee_percent' => $validated['fee_percent'] ?? null,
+                'payment_terms' => $validated['payment_terms'] ?? null,
+                'payment_method' => $validated['payment_method'] ?? null,
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('brokers.index')->with('success', 'Broker updated successfully.');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Erro ao atualizar broker', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'broker_id' => $id
+            ]);
+
+            return redirect()->back()
+                ->withErrors(['error' => 'Erro ao atualizar broker: ' . $e->getMessage()])
+                ->withInput();
+        }
     }
 
     public function destroy($id)
@@ -184,9 +224,29 @@ class BrokerController extends Controller
         $broker = Broker::findOrFail($id);
         $user = $broker->user;
 
-        $broker->delete();
-        $user->delete();
+        try {
+            DB::beginTransaction();
 
-        return redirect()->route('brokers.index')->with('success', 'Broker deleted successfully.');
+            $broker->delete();
+            if ($user) {
+                $user->delete();
+            }
+
+            DB::commit();
+
+            return redirect()->route('brokers.index')->with('success', 'Broker deleted successfully.');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Erro ao remover broker', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'broker_id' => $id
+            ]);
+
+            return redirect()->route('brokers.index')
+                             ->withErrors(['error' => 'Erro ao remover broker: ' . $e->getMessage()]);
+        }
     }
 }

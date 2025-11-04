@@ -30,62 +30,69 @@ class LoadImportController extends Controller
      * 2. PROCESSAR importação de planilha
      */
     public function importar(Request $request)
-{
+    {
 
-    try {
-        $request->validate([
-            'arquivo' => 'required|file|mimes:xlsx,xls|max:10240',
-            'carrier_id' => 'required|exists:carriers,id',
-            'dispatcher_id' => 'required|exists:dispatchers,id',
-        ]);
+        try {
+            $request->validate([
+                'arquivo' => 'required|file|mimes:xlsx,xls|max:10240',
+                'carrier_id' => 'required|exists:carriers,id',
+                'dispatcher_id' => 'required|exists:dispatchers,id',
+            ]);
 
-        $file = $request->file('arquivo');
+            $file = $request->file('arquivo');
 
-        if (!$file || !$file->isValid()) {
-            throw new \Exception('Arquivo inválido');
-        }
+            if (!$file || !$file->isValid()) {
+                throw new \Exception('Arquivo inválido');
+            }
 
-        // Cria diretório na pasta public se não existir
-        $uploadDir = public_path('uploads');
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0755, true);
-        }
+            // Cria diretório na pasta public se não existir
+            $uploadDir = public_path('uploads');
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
 
-        // Gera nome único para o arquivo
-        $fileName = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
-        $destination = $uploadDir . '/' . $fileName;
+            // Gera nome único para o arquivo
+            $fileName = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
+            $destination = $uploadDir . '/' . $fileName;
 
-        // Move o arquivo para public/uploads
-        if (!move_uploaded_file($file->getPathname(), $destination)) {
-            throw new \Exception('Falha ao mover arquivo para public/uploads');
-        }
+            // Move o arquivo para public/uploads
+            if (!move_uploaded_file($file->getPathname(), $destination)) {
+                throw new \Exception('Falha ao mover arquivo para public/uploads');
+            }
 
-        \Log::info('Arquivo salvo em: ' . $destination);
+            Log::info('Arquivo salvo em: ' . $destination);
 
-        app(UsageTrackingRepository::class)
-            ->incrementUsage(Auth::user(), 'load');
+            app(UsageTrackingRepository::class)
+                ->incrementUsage(Auth::user(), 'load');
 
-        // Importa usando o caminho completo
-        Excel::import(new LoadsImport(
-            $request->input('carrier_id'),
-            $request->input('dispatcher_id'),
-            $request->input('employee_id')
-        ), $destination);
+            // Importa usando o caminho completo
+            $import = new LoadsImport(
+                $request->input('carrier_id'),
+                $request->input('dispatcher_id'),
+                $request->input('employee_id')
+            );
+            
+            Excel::import($import, $destination);
 
-        // Remove o arquivo após importação (opcional)
-        if (file_exists($destination)) {
-            unlink($destination);
-        }
+            // Remove o arquivo após importação (opcional)
+            if (file_exists($destination)) {
+                unlink($destination);
+            }
 
-        return redirect()->route('loads.index')
-                        ->with('success', 'Planilha importada com sucesso!');
+            // Log de resultado
+            Log::info('Importação concluída', [
+                'carrier_id' => $request->input('carrier_id'),
+                'dispatcher_id' => $request->input('dispatcher_id'),
+            ]);
 
-    } catch (\Exception $e) {
-        \Log::error('Erro na importação: ' . $e->getMessage());
-        return redirect()->back()
+            return redirect()->route('loads.index')
+                ->with('success', 'Planilha importada com sucesso! Verifique os logs para detalhes.');
+        } catch (\Exception $e) {
+            Log::error('Erro na importação: ' . $e->getMessage());
+            return redirect()->back()
                 ->withErrors(['erro' => 'Erro ao importar: ' . $e->getMessage()]);
+        }
     }
-}
 
     /**
      * 3. FORMULÁRIO para cadastro/edição manual de um Load
@@ -105,20 +112,19 @@ class LoadImportController extends Controller
         } else {
             // Criar coleção com o dispatcher encontrado
             $dispatchers = collect([$dispatcher]);
-            
+
             // Filtra os carriers pelo dispatcher_id
             $carriers = Carrier::with(['dispatchers.user', 'user'])
                 ->where('dispatcher_id', $dispatcher->id)
                 ->get(); // Usar get() ao invés de paginate() para formulário
-            
+
             // Somente employees vinculados ao dispatcher logado
-            $employees = Employee::with('user', 'dispatcher.user')
+            $employees = Employee::with('dispatcher.user')
                 ->where('dispatcher_id', $dispatcher->id)
                 ->get();
         }
-        
-        $loads = Load::all();
-        return view('load.create', compact('loads', 'dispatchers', 'carriers', 'employees'));
+
+        return view('load.create', compact('dispatchers', 'carriers', 'employees'));
     }
 
     /**
@@ -240,8 +246,8 @@ class LoadImportController extends Controller
 
         if (!$usageCheck['allowed']) {
             return redirect()->route('subscription.plans')
-                        ->with('error', 'You have reached your plan limits. Please upgrade to continue.')
-                        ->with('usage_info', $usageCheck);
+                ->with('error', 'You have reached your plan limits. Please upgrade to continue.')
+                ->with('usage_info', $usageCheck);
         }
 
         // Update or Create em Load: se existir, atualiza; caso contrário, cria novo
@@ -257,7 +263,7 @@ class LoadImportController extends Controller
         $billingService->trackUsage(auth()->user(), 'load');
 
         return redirect()->route('loads.index')
-                         ->with('success', 'Registro salvo/atualizado com sucesso!');
+            ->with('success', 'Registro salvo/atualizado com sucesso!');
     }
 
     public function show($id)
@@ -283,18 +289,18 @@ class LoadImportController extends Controller
         } else {
             // Criar coleção com o dispatcher encontrado
             $dispatchers = collect([$dispatcher]);
-            
+
             // Filtra os carriers pelo dispatcher_id
             $carriers = Carrier::with(['dispatchers.user', 'user'])
                 ->where('dispatcher_id', $dispatcher->id)
                 ->get(); // Usar get() ao invés de paginate() para formulário
-            
+
             // Somente employees vinculados ao dispatcher logado
-            $employees = Employee::with('user', 'dispatcher.user')
+            $employees = Employee::with('dispatcher.user')
                 ->where('dispatcher_id', $dispatcher->id)
                 ->get();
         }
-        
+
         $load = Load::findOrFail($id);
         return view('load.edit', compact('load', 'dispatchers', 'carriers', 'employees'));
     }
@@ -416,7 +422,7 @@ class LoadImportController extends Controller
         $load->save();
 
         return redirect()->route('loads.index')
-                         ->with('success', 'Load atualizado com sucesso!');
+            ->with('success', 'Load atualizado com sucesso!');
     }
 
     public function updateEmployee(Request $request, Load $load)
@@ -442,20 +448,17 @@ class LoadImportController extends Controller
 
         if (!$dispatchers) {
             $carriers = collect();
-        } else {
-            // Filtra os carriers pelo dispatcher_id
-            $carriers = Carrier::with(['dispatchers.user', 'user'])
-                ->where('dispatcher_id', $dispatchers->id)
-                ->paginate(10);
-        }
-
-        if (!$dispatchers) {
             $employees = collect();
         } else {
-            // Somente employees vinculados ao dispatcher logado
-            $employees = Employee::with('user', 'dispatcher.user')
+            // Filtra os carriers pelo dispatcher_id - sem eager loading desnecessário
+            $carriers = Carrier::select('id', 'company_name')
                 ->where('dispatcher_id', $dispatchers->id)
-                ->get(); // <- coleção (NÃO paginate) para popular os selects
+                ->get();
+            
+            // Somente employees vinculados ao dispatcher logado - sem eager loading desnecessário
+            $employees = Employee::select('id', 'name', 'dispatcher_id')
+                ->where('dispatcher_id', $dispatchers->id)
+                ->get();
         }
 
         // Construir query com filtros
@@ -548,7 +551,7 @@ class LoadImportController extends Controller
 
 
     // Remove um loads
-      public function destroy(string $id)
+    public function destroy(string $id)
     {
         $load = Load::findOrFail($id);
 
@@ -602,7 +605,6 @@ class LoadImportController extends Controller
             return response()->json([
                 'message' => 'Todas as cargas foram excluídas com sucesso.'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Erro ao excluir cargas: ' . $e->getMessage()
@@ -639,12 +641,32 @@ class LoadImportController extends Controller
                         // Buscar dados atuais dos loads que serão deletados
                         $currentLoads = Load::whereIn('load_id', $loadsToUpdate)
                             ->select([
-                                'id', 'load_id', 'year_make_model', 'dispatcher', 'broker_fee',
-                                'driver_pay', 'driver', 'lot_number', 'paid_amount', 'paid_method',
-                                'payment_notes', 'payment_status', 'payment_terms', 'payment_method',
-                                'invoiced_fee', 'price', 'carrier_id', 'dispatcher_id', 'vin',
-                                'pickup_city', 'delivery_city', 'scheduled_pickup_date', 'actual_pickup_date',
-                                'scheduled_delivery_date', 'actual_delivery_date', 'created_at'
+                                'id',
+                                'load_id',
+                                'year_make_model',
+                                'dispatcher',
+                                'broker_fee',
+                                'driver_pay',
+                                'driver',
+                                'lot_number',
+                                'paid_amount',
+                                'paid_method',
+                                'payment_notes',
+                                'payment_status',
+                                'payment_terms',
+                                'payment_method',
+                                'invoiced_fee',
+                                'price',
+                                'carrier_id',
+                                'dispatcher_id',
+                                'vin',
+                                'pickup_city',
+                                'delivery_city',
+                                'scheduled_pickup_date',
+                                'actual_pickup_date',
+                                'scheduled_delivery_date',
+                                'actual_delivery_date',
+                                'created_at'
                             ])
                             ->get()
                             ->toArray();
@@ -653,7 +675,7 @@ class LoadImportController extends Controller
                         $existingDetails = $charge->load_details ?? [];
 
                         // Remover loads antigos e adicionar versões atualizadas
-                        $updatedDetails = array_filter($existingDetails, function($item) use ($loadsToUpdate) {
+                        $updatedDetails = array_filter($existingDetails, function ($item) use ($loadsToUpdate) {
                             return !in_array($item['load_id'], $loadsToUpdate);
                         });
 
@@ -664,9 +686,8 @@ class LoadImportController extends Controller
                     }
                 }
             }
-
         } catch (\Exception $e) {
-            \Log::error('Erro ao atualizar snapshots das invoices: ' . $e->getMessage());
+            Log::error('Erro ao atualizar snapshots das invoices: ' . $e->getMessage());
         }
     }
 
@@ -730,7 +751,6 @@ class LoadImportController extends Controller
                     'missing_fields' => $mappingAnalysis['missing']
                 ]
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -925,7 +945,6 @@ class LoadImportController extends Controller
                 'preview' => $preview,
                 'statistics' => $this->generatePreviewStatistics($preview)
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -940,7 +959,7 @@ class LoadImportController extends Controller
     private function simulateRowProcessing($row, $carrierId, $dispatcherId)
     {
         // Replicar a lógica do LoadsImport::getValue()
-        $getValue = function($possibleKeys) use ($row) {
+        $getValue = function ($possibleKeys) use ($row) {
             foreach ($possibleKeys as $key) {
                 if (isset($row[$key]) && !empty($row[$key])) {
                     return trim($row[$key]);
@@ -957,7 +976,7 @@ class LoadImportController extends Controller
             return null;
         };
 
-        $getNumeric = function($possibleKeys) use ($getValue) {
+        $getNumeric = function ($possibleKeys) use ($getValue) {
             $value = $getValue($possibleKeys);
             if ($value === null || $value === '') return null;
 
@@ -1054,6 +1073,4 @@ class LoadImportController extends Controller
 
         return $stats;
     }
-
-
 }

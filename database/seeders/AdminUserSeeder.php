@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Role;
 use App\Models\Permission;
 use App\Models\RolesUsers;
+use App\Models\Dispatcher;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 
@@ -52,6 +53,10 @@ class AdminUserSeeder extends Seeder
         $this->assignRole($user1, $adminRole);
         $this->assignRole($user2, $adminRole);
 
+        // Criar dispatcher para cada admin se não existir
+        $this->createDispatcherForUser($user1);
+        $this->createDispatcherForUser($user2);
+
         // Atribuir todas as permissions ao role Admin
         if ($permissions->count() > 0) {
             // Usar sync para garantir que todas as permissions sejam atribuídas
@@ -83,6 +88,39 @@ class AdminUserSeeder extends Seeder
         } else {
             $this->command->info("Usuário '{$user->email}' já possui a role '{$role->name}'");
         }
+    }
+
+    /**
+     * Criar dispatcher para um usuário admin
+     */
+    private function createDispatcherForUser(User $user): void
+    {
+        // Verificar se já existe dispatcher para este usuário
+        $existingDispatcher = Dispatcher::where('user_id', $user->id)->first();
+        
+        if ($existingDispatcher) {
+            $this->command->info("Dispatcher já existe para o usuário '{$user->email}'");
+            return;
+        }
+
+        // Criar dispatcher
+        $dispatcher = Dispatcher::create([
+            'user_id' => $user->id,
+            'type' => 'Individual',
+            'company_name' => $user->name,
+            'ssn_itin' => null,
+            'ein_tax_id' => null,
+            'address' => null,
+            'city' => null,
+            'state' => null,
+            'zip_code' => null,
+            'country' => null,
+            'notes' => null,
+            'phone' => null,
+            'departament' => null,
+        ]);
+
+        $this->command->info("✅ Dispatcher criado para o usuário '{$user->email}' (ID: {$dispatcher->id})");
     }
 }
 

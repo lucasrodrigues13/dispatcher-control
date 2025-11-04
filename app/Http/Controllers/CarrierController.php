@@ -92,54 +92,73 @@ class CarrierController extends Controller
         $base = \Illuminate\Support\Str::of($validated['name'])->lower()->ascii()->replaceMatches('/[^a-z0-9]+/', '');
         $plainPassword = (string) $base.'2025';
 
-        // 4) Cria usuário
-        $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => Hash::make($plainPassword),
-            'must_change_password' => true,
-            'email_verified_at' => now()
-        ]);
+        try {
+            DB::beginTransaction();
 
-        // 5) Cria carrier
-        Carrier::create([
-            'user_id'          => $user->id,
-            'company_name'     => $validated['company_name'],
-            'phone'            => $validated['phone'],
-            'contact_name'     => $validated['contact_name'] ?? null,
-            'about'            => $validated['about'] ?? null,
-            'website'          => $validated['website'] ?? null,
-            'trailer_capacity' => $validated['trailer_capacity'] ?? null,
-            'is_auto_hauler'   => (bool) ($validated['is_auto_hauler'] ?? false),
-            'is_towing'        => (bool) ($validated['is_towing'] ?? false),
-            'is_driveaway'     => (bool) ($validated['is_driveaway'] ?? false),
-            'contact_phone'    => $validated['contact_phone'] ?? null,
-            'address'          => $validated['address'],
-            'city'             => $validated['city'] ?? null,
-            'state'            => $validated['state'] ?? null,
-            'zip'              => $validated['zip'] ?? null,
-            'country'          => $validated['country'] ?? null,
-            'mc'               => $validated['mc'] ?? null,
-            'dot'              => $validated['dot'] ?? null,
-            'ein'              => $validated['ein'] ?? null,
-            'dispatcher_id' => $validated['dispatcher_id'],
-        ]);
+            // Cria usuário
+            $user = User::create([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => Hash::make($plainPassword),
+                'must_change_password' => true,
+                'email_verified_at' => now()
+            ]);
 
-        // 6) Contabiliza uso
-        app(UsageTrackingRepository::class)->incrementUsage(Auth::user(), 'carrier');
+            // Cria carrier
+            $carrier = Carrier::create([
+                'user_id'          => $user->id,
+                'company_name'     => $validated['company_name'],
+                'phone'            => $validated['phone'],
+                'contact_name'     => $validated['contact_name'] ?? null,
+                'about'            => $validated['about'] ?? null,
+                'website'          => $validated['website'] ?? null,
+                'trailer_capacity' => $validated['trailer_capacity'] ?? null,
+                'is_auto_hauler'   => (bool) ($validated['is_auto_hauler'] ?? false),
+                'is_towing'        => (bool) ($validated['is_towing'] ?? false),
+                'is_driveaway'     => (bool) ($validated['is_driveaway'] ?? false),
+                'contact_phone'    => $validated['contact_phone'] ?? null,
+                'address'          => $validated['address'],
+                'city'             => $validated['city'] ?? null,
+                'state'            => $validated['state'] ?? null,
+                'zip'              => $validated['zip'] ?? null,
+                'country'          => $validated['country'] ?? null,
+                'mc'               => $validated['mc'] ?? null,
+                'dot'              => $validated['dot'] ?? null,
+                'ein'              => $validated['ein'] ?? null,
+                'dispatcher_id' => $validated['dispatcher_id'],
+            ]);
 
-        // 7) Role "Carrier"
-        $role = DB::table('roles')->where('name', 'Carrier')->first();
-        if ($role) {
-            $roles = new RolesUsers();
-            $roles->user_id = $user->id;
-            $roles->role_id = $role->id;
-            $roles->save();
+            // Contabiliza uso
+            app(UsageTrackingRepository::class)->incrementUsage(Auth::user(), 'carrier');
+
+            // Role "Carrier"
+            $role = DB::table('roles')->where('name', 'Carrier')->first();
+            if ($role) {
+                $roles = new RolesUsers();
+                $roles->user_id = $user->id;
+                $roles->role_id = $role->id;
+                $roles->save();
+            }
+
+            // Assinatura trial
+            $billingService = app(BillingService::class);
+            $billingService->createTrialSubscription($user);
+
+            DB::commit();
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Erro ao criar carrier', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'data' => $validated
+            ]);
+
+            return redirect()->back()
+                ->withErrors(['error' => 'Erro ao criar carrier: ' . $e->getMessage()])
+                ->withInput();
         }
-
-        // 8) Assinatura trial
-        $billingService = app(BillingService::class);
-        $billingService->createTrialSubscription($user);
 
         // 9) E-mail (com tratamento de erro para não quebrar o fluxo)
         try {

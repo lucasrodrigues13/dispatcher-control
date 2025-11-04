@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
 use App\Mail\NewCarrierCredentialsMail;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class DriverController extends Controller
 {
@@ -100,24 +101,45 @@ class DriverController extends Controller
                 ->withInput();
         }
 
-        // Cria o usuário e obtém o ID
-        $user = User::create([
-            'name'     => $validated['name'],
-            'email'    => $validated['email'],
-            'password' => Hash::make($plainPassword),
-            'must_change_password' => true,
-            'email_verified_at' => now(),
-        ]);
+        try {
+            DB::beginTransaction();
 
-        // Cria o driver
-        Driver::create([
-            'carrier_id' => $validated['carrier_id'],
-            'phone'      => $validated['phone'],
-            'ssn_tax_id' => $validated['ssn_tax_id'],
-            'user_id'    => $user->id,
-        ]);
+            // Cria o usuário
+            $user = User::create([
+                'name'     => $validated['name'],
+                'email'    => $validated['email'],
+                'password' => Hash::make($plainPassword),
+                'must_change_password' => true,
+                'email_verified_at' => now(),
+            ]);
 
-        app(UsageTrackingRepository::class)->incrementUsage(Auth::user(), 'driver');
+            // Cria o driver (vinculado ao user_id)
+            Driver::create([
+                'carrier_id' => $validated['carrier_id'],
+                'name' => $validated['name'],
+                'phone'      => $validated['phone'],
+                'ssn_tax_id' => $validated['ssn_tax_id'],
+                'email' => $validated['email'],
+            ]);
+
+            // Contabiliza uso
+            app(UsageTrackingRepository::class)->incrementUsage(Auth::user(), 'driver');
+
+            DB::commit();
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Erro ao criar driver', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'data' => $validated
+            ]);
+
+            return redirect()->back()
+                ->withErrors(['error' => 'Erro ao criar driver: ' . $e->getMessage()])
+                ->withInput();
+        }
 
         // Envia email com credenciais (com tratamento de erro para não quebrar o fluxo)
         try {
@@ -179,23 +201,42 @@ class DriverController extends Controller
             'ssn_tax_id'   => 'required|string|max:50',
         ]);
 
-        // Atualiza dados do usuário
-        $driver->user->update([
-            'name'  => $validated['name'],
-            'email' => $validated['email'],
-            // Atualiza senha somente se preenchida
-            'password' => $validated['password'] ? Hash::make($validated['password']) : $driver->user->password,
-        ]);
+        try {
+            DB::beginTransaction();
 
-        // Atualiza dados do driver
-        $driver->update([
-            'carrier_id' => $validated['carrier_id'],
-            'phone'      => $validated['phone'],
-            'ssn_tax_id' => $validated['ssn_tax_id'],
-        ]);
+            // Atualiza dados do usuário
+            $driver->user->update([
+                'name'  => $validated['name'],
+                'email' => $validated['email'],
+                // Atualiza senha somente se preenchida
+                'password' => $validated['password'] ? Hash::make($validated['password']) : $driver->user->password,
+            ]);
 
-        return redirect()->route('drivers.index')
-                         ->with('success', 'Driver atualizado com sucesso.');
+            // Atualiza dados do driver
+            $driver->update([
+                'carrier_id' => $validated['carrier_id'],
+                'phone'      => $validated['phone'],
+                'ssn_tax_id' => $validated['ssn_tax_id'],
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('drivers.index')
+                             ->with('success', 'Driver atualizado com sucesso.');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Erro ao atualizar driver', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'driver_id' => $id
+            ]);
+
+            return redirect()->back()
+                ->withErrors(['error' => 'Erro ao atualizar driver: ' . $e->getMessage()])
+                ->withInput();
+        }
     }
 
     /**
@@ -205,11 +246,31 @@ class DriverController extends Controller
     {
         $driver = Driver::with('user')->findOrFail($id);
 
-        // Remove o driver e o usuário associado
-        $driver->delete();
-        $driver->user->delete();
+        try {
+            DB::beginTransaction();
 
-        return redirect()->route('drivers.index')
-                         ->with('success', 'Driver removido com sucesso.');
+            // Remove o driver e o usuário associado
+            $driver->delete();
+            if ($driver->user) {
+                $driver->user->delete();
+            }
+
+            DB::commit();
+
+            return redirect()->route('drivers.index')
+                             ->with('success', 'Driver removido com sucesso.');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Erro ao remover driver', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'driver_id' => $id
+            ]);
+
+            return redirect()->route('drivers.index')
+                             ->withErrors(['error' => 'Erro ao remover driver: ' . $e->getMessage()]);
+        }
     }
 }
