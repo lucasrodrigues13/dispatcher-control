@@ -292,12 +292,19 @@ class LoadsImport implements ToModel, WithHeadingRow, WithValidation
                 ]);
             }
 
-            // Verificar se já existe e atualizar OU criar novo
-            $existingLoad = Load::where('load_id', $cleanData['load_id'])->first();
+            // ⭐ NOVO: Verificar se já existe (incluindo deletados) e restaurar/atualizar OU criar novo
+            // Usa withTrashed() para incluir loads deletados (soft delete)
+            $existingLoad = Load::withTrashed()->where('load_id', $cleanData['load_id'])->first();
 
             if ($existingLoad) {
-                // ⭐ FIX: Update existing record directly instead of through batch
                 try {
+                    // Se está deletado, restaurar primeiro (remove deleted_at)
+                    if ($existingLoad->trashed()) {
+                        $existingLoad->restore();
+                        Log::info("Load deletado restaurado: {$cleanData['load_id']}");
+                    }
+                    
+                    // Atualizar com novos dados
                     $existingLoad->update($cleanData);
                     self::$updatedCount++;
                 } catch (\Exception $e) {
@@ -314,6 +321,20 @@ class LoadsImport implements ToModel, WithHeadingRow, WithValidation
             try {
                 $newLoad = Load::create($cleanData);
                 self::$createdCount++;
+                
+                // ⭐ NOVO: Incrementar contador apenas quando criar novo load
+                // Não incrementa ao restaurar ou atualizar (já foi contado antes)
+                try {
+                    $user = \Illuminate\Support\Facades\Auth::user();
+                    if ($user) {
+                        app(\App\Repositories\UsageTrackingRepository::class)
+                            ->incrementUsage($user, 'load');
+                    }
+                } catch (\Exception $e) {
+                    // Log mas não falha a importação se houver erro no tracking
+                    Log::warning("Erro ao incrementar contador de loads: " . $e->getMessage());
+                }
+                
                 return null; // Retornar null porque já foi criado
             } catch (\Exception $e) {
                 self::$errorCount++;
@@ -471,7 +492,8 @@ class LoadsImport implements ToModel, WithHeadingRow, WithValidation
     }
 
     /**
-     * ⭐ IMPROVED: More robust date parsing
+     * ⭐ IMPROVED: More robust date parsing - handles dates with time
+     * Returns datetime format (Y-m-d H:i:s) preserving time if available
      */
     private function parseDate(array $row, array $possibleKeys)
     {
@@ -482,34 +504,77 @@ class LoadsImport implements ToModel, WithHeadingRow, WithValidation
         }
 
         $value = trim((string) $value);
+        $originalValue = $value; // Keep original for logging
 
-        // Try different date formats
+        // ⭐ FIX: Handle Excel datetime values (dates with time)
+        // Try using Carbon/DateTime first (handles datetime strings well)
+        try {
+            // Try Carbon first (if available) - handles datetime strings well
+            if (class_exists('\Carbon\Carbon')) {
+                $carbon = \Carbon\Carbon::parse($value);
+                if ($carbon && $carbon->year >= 1900 && $carbon->year <= 2030) {
+                    // Return datetime format preserving time if available
+                    return $carbon->format('Y-m-d H:i:s');
+                }
+            }
+            
+            // Fallback to DateTime
+            $dateTime = new \DateTime($value);
+            if ($dateTime && $dateTime->format('Y') >= 1900 && $dateTime->format('Y') <= 2030) {
+                // Return datetime format preserving time if available
+                return $dateTime->format('Y-m-d H:i:s');
+            }
+        } catch (\Exception $e) {
+            // If automatic parsing fails, continue to manual parsing
+            // The value might be in a format that Carbon/DateTime can't parse directly
+        }
+
+        // Manual parsing for specific formats (fallback)
+        // Try to extract date and time separately
+        $timePart = '00:00:00';
+        
+        if (strpos($value, ' ') !== false) {
+            $parts = explode(' ', $value);
+            $datePart = trim($parts[0]);
+            if (isset($parts[1])) {
+                $timeStr = trim($parts[1]);
+                // Try to parse time part
+                if (preg_match('/(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/', $timeStr, $timeMatches)) {
+                    $hour = str_pad((int)$timeMatches[1], 2, '0', STR_PAD_LEFT);
+                    $minute = str_pad((int)$timeMatches[2], 2, '0', STR_PAD_LEFT);
+                    $second = isset($timeMatches[3]) ? str_pad((int)$timeMatches[3], 2, '0', STR_PAD_LEFT) : '00';
+                    $timePart = "$hour:$minute:$second";
+                }
+            }
+            $value = $datePart;
+        }
+
         $formats = [
-            '/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/', // mm/dd/yyyy
-            '/^(\d{4})-(\d{1,2})-(\d{1,2})$/',   // yyyy-mm-dd
-            '/^(\d{1,2})-(\d{1,2})-(\d{4})$/',   // dd-mm-yyyy
-            '/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/', // yyyy/mm/dd
+            '/^(\d{1,2})\/(\d{1,2})\/(\d{4})/', // mm/dd/yyyy
+            '/^(\d{4})-(\d{1,2})-(\d{1,2})/',   // yyyy-mm-dd
+            '/^(\d{1,2})-(\d{1,2})-(\d{4})/',   // dd-mm-yyyy
+            '/^(\d{4})\/(\d{1,2})\/(\d{1,2})/', // yyyy/mm/dd
         ];
 
         foreach ($formats as $format) {
             if (preg_match($format, $value, $matches)) {
                 try {
-                    if ($format === '/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/') {
+                    if ($format === '/^(\d{1,2})\/(\d{1,2})\/(\d{4})/') {
                         // mm/dd/yyyy
                         $month = (int) $matches[1];
                         $day = (int) $matches[2];
                         $year = (int) $matches[3];
-                    } elseif ($format === '/^(\d{4})-(\d{1,2})-(\d{1,2})$/') {
+                    } elseif ($format === '/^(\d{4})-(\d{1,2})-(\d{1,2})/') {
                         // yyyy-mm-dd
                         $year = (int) $matches[1];
                         $month = (int) $matches[2];
                         $day = (int) $matches[3];
-                    } elseif ($format === '/^(\d{1,2})-(\d{1,2})-(\d{4})$/') {
+                    } elseif ($format === '/^(\d{1,2})-(\d{1,2})-(\d{4})/') {
                         // dd-mm-yyyy
                         $day = (int) $matches[1];
                         $month = (int) $matches[2];
                         $year = (int) $matches[3];
-                    } elseif ($format === '/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/') {
+                    } elseif ($format === '/^(\d{4})\/(\d{1,2})\/(\d{1,2})/') {
                         // yyyy/mm/dd
                         $year = (int) $matches[1];
                         $month = (int) $matches[2];
@@ -517,7 +582,8 @@ class LoadsImport implements ToModel, WithHeadingRow, WithValidation
                     }
 
                     if ($year >= 1900 && $year <= 2030 && checkdate($month, $day, $year)) {
-                        return sprintf('%04d-%02d-%02d', $year, $month, $day);
+                        // Return datetime format with time if available
+                        return sprintf('%04d-%02d-%02d %s', $year, $month, $day, $timePart);
                     }
                 } catch (\Exception $e) {
                     continue;
@@ -525,6 +591,8 @@ class LoadsImport implements ToModel, WithHeadingRow, WithValidation
             }
         }
 
+        // Log warning for debugging
+        Log::warning("Não foi possível fazer parse da data: " . $originalValue);
         return null;
     }
 

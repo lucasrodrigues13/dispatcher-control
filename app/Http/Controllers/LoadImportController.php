@@ -62,8 +62,6 @@ class LoadImportController extends Controller
 
             Log::info('Arquivo salvo em: ' . $destination);
 
-            app(UsageTrackingRepository::class)
-                ->incrementUsage(Auth::user(), 'load');
 
             // Importa usando o caminho completo
             $import = new LoadsImport(
@@ -250,17 +248,30 @@ class LoadImportController extends Controller
                 ->with('usage_info', $usageCheck);
         }
 
-        // Update or Create em Load: se existir, atualiza; caso contrário, cria novo
-        Load::updateOrCreate(
-            ['load_id' => $request->input('load_id')],
-            $data
-        );
+        // ⭐ NOVO: Verificar se existe (incluindo deletados) antes de criar/atualizar
+        $loadId = $request->input('load_id');
+        $existingLoad = Load::withTrashed()->where('load_id', $loadId)->first();
+        
+        if ($existingLoad) {
+            // Se está deletado, restaurar primeiro
+            if ($existingLoad->trashed()) {
+                $existingLoad->restore();
+            }
+            // Atualizar com novos dados
+            $existingLoad->update($data);
+            $wasCreated = false;
+        } else {
+            // Criar novo
+            Load::create($data);
+            $wasCreated = true;
+        }
 
-        // Tracking de uso
-        app(BillingService::class)->trackUsage(auth()->user(), 'load');
-
-        // Rastrear uso
-        $billingService->trackUsage(auth()->user(), 'load');
+        // ⭐ NOVO: Incrementar contador apenas quando criar novo load
+        // Não incrementa ao restaurar ou atualizar (já foi contado antes)
+        if ($wasCreated) {
+            app(\App\Repositories\UsageTrackingRepository::class)
+                ->incrementUsage(auth()->user(), 'load');
+        }
 
         return redirect()->route('loads.index')
             ->with('success', 'Registro salvo/atualizado com sucesso!');

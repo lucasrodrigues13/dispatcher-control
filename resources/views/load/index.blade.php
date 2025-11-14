@@ -12,7 +12,7 @@
     /* Adicione isso no seu arquivo CSS */
   .table-responsive {
       position: relative;
-      max-height: 400px; /* Ajuste esta altura conforme necessário */
+      max-height: 1000px; /* Ajuste esta altura conforme necessário */
       overflow: auto;
   }
 

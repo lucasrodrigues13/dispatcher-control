@@ -22,12 +22,12 @@ class TimeLineChargeController extends Controller
     public function index()
     {
         $timeLineCharges = TimeLineCharge::with(['carrier.user', 'dispatcher.user'])
-                                    ->orderBy('created_at', 'desc')
-                                    ->paginate(10);
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
 
         // Para cada invoice, calcula o total dos loads
         // Isso pode ser otimizado se necessário, mas para 10 registros por página está ok
-        $timeLineCharges->getCollection()->transform(function($charge) {
+        $timeLineCharges->getCollection()->transform(function ($charge) {
             $charge->calculated_total = $charge->getTotalLoadsAmount();
             return $charge;
         });
@@ -58,157 +58,156 @@ class TimeLineChargeController extends Controller
     }
 
 
-   public function create(Request $request)
-{
-    // Buscar dispatcher do usuário logado
-    $dispatcher = Dispatcher::with('user')
-        ->where('user_id', auth()->id())
-        ->first();
+    public function create(Request $request)
+    {
+        // Buscar dispatcher do usuário logado
+        $dispatcher = Dispatcher::with('user')
+            ->where('user_id', auth()->id())
+            ->first();
 
-    // Carregar carriers e dispatchers filtrados pelo dispatcher do usuário logado
-    if (!$dispatcher) {
-        $carriers = collect();
-        $dispatchers = collect();
-    } else {
-        // Criar coleção com o dispatcher encontrado
-        $dispatchers = collect([$dispatcher]);
-        
-        // Filtra os carriers pelo dispatcher_id
-        $carriers = Carrier::with('user')
-            ->where('dispatcher_id', $dispatcher->id)
-            ->get();
-    }
+        // Carregar carriers e dispatchers filtrados pelo dispatcher do usuário logado
+        if (!$dispatcher) {
+            $carriers = collect();
+            $dispatchers = collect();
+        } else {
+            // Criar coleção com o dispatcher encontrado
+            $dispatchers = collect([$dispatcher]);
 
-    $totalAmount = 0;
-    $loads = collect(); // Inicialmente vazio
-
-    // ⭐ CORRIGIDO: Verifica se filtros foram aplicados - PERMITE "all" como carrier válido
-    $hasFilters = $request->filled('carrier_id') &&
-                  $request->filled(['date_start', 'date_end']);
-
-    if ($hasFilters) {
-        $query = Load::query();
-
-        // Carrega os relacionamentos necessários para exibir carrier e dispatcher
-        $query->with(['carrier.user', 'dispatcher.user']);
-
-        // ⭐ CORRIGIDO: Filtro por carrier - só aplica filtro se não for "all"
-        if ($request->filled('carrier_id') && $request->carrier_id !== 'all') {
-            $query->where('carrier_id', $request->carrier_id);
+            // Filtra os carriers pelo dispatcher_id
+            $carriers = Carrier::with('user')
+                ->where('dispatcher_id', $dispatcher->id)
+                ->get();
         }
-        // Se carrier_id for "all", não aplica nenhum filtro de carrier (busca todos)
 
-        // ⭐ FILTROS DE DATAS DINÂMICOS - TOTALMENTE REFORMULADO
-        $dateStart = $request->date_start;
-        $dateEnd = $request->date_end;
+        $totalAmount = 0;
+        $loads = collect(); // Inicialmente vazio
 
-        if ($dateStart && $dateEnd) {
-            // Lista de colunas de data válidas no modelo Load
-            $validDateColumns = [
-                'actual_delivery_date',
-                'actual_pickup_date',
-                'creation_date',
-                'invoice_date',
-                'receipt_date',
-                'scheduled_pickup_date',
-                'scheduled_delivery_date'
-            ];
+        // ⭐ CORRIGIDO: Verifica se filtros foram aplicados - PERMITE "all" como carrier válido
+        $hasFilters = $request->filled('carrier_id') &&
+            $request->filled(['date_start', 'date_end']);
 
-            // Verifica se há filtros específicos selecionados
-            $selectedFilters = [];
-            if ($request->has('filters') && is_array($request->filters)) {
-                foreach ($request->filters as $column => $value) {
-                    if ($value === "1" && in_array($column, $validDateColumns)) {
-                        $selectedFilters[] = $column;
-                    }
-                }
+        if ($hasFilters) {
+            $query = Load::query();
+
+            // Carrega os relacionamentos necessários para exibir carrier e dispatcher
+            $query->with(['carrier.user', 'dispatcher.user']);
+
+            // ⭐ CORRIGIDO: Filtro por carrier - só aplica filtro se não for "all"
+            if ($request->filled('carrier_id') && $request->carrier_id !== 'all') {
+                $query->where('carrier_id', $request->carrier_id);
             }
+            // Se carrier_id for "all", não aplica nenhum filtro de carrier (busca todos)
 
-            // ⭐ NOVA LÓGICA: Aplicar filtros dinamicamente
-            if (!empty($selectedFilters)) {
-                // Se há filtros específicos selecionados, usar apenas esses
-                $query->where(function($q) use ($selectedFilters, $dateStart, $dateEnd) {
-                    foreach ($selectedFilters as $index => $column) {
-                        if ($index === 0) {
-                            // Primeira condição usa where
-                            $q->whereBetween($column, [$dateStart, $dateEnd]);
-                        } else {
-                            // Demais condições usam orWhereBetween
-                            $q->orWhereBetween($column, [$dateStart, $dateEnd]);
+            // ⭐ FILTROS DE DATAS DINÂMICOS - TOTALMENTE REFORMULADO
+            $dateStart = $request->date_start;
+            $dateEnd = $request->date_end;
+
+            if ($dateStart && $dateEnd) {
+                // Lista de colunas de data válidas no modelo Load
+                $validDateColumns = [
+                    'actual_delivery_date',
+                    'actual_pickup_date',
+                    'creation_date',
+                    'invoice_date',
+                    'receipt_date',
+                    'scheduled_pickup_date',
+                    'scheduled_delivery_date'
+                ];
+
+                // Verifica se há filtros específicos selecionados
+                $selectedFilters = [];
+                if ($request->has('filters') && is_array($request->filters)) {
+                    foreach ($request->filters as $column => $value) {
+                        if ($value === "1" && in_array($column, $validDateColumns)) {
+                            $selectedFilters[] = $column;
                         }
                     }
-                });
+                }
 
-                // Log dos filtros aplicados
-                Log::info('Filtros específicos aplicados:', [
-                    'selected_filters' => $selectedFilters,
-                    'date_range' => [$dateStart, $dateEnd]
-                ]);
+                // ⭐ NOVA LÓGICA: Aplicar filtros dinamicamente
+                if (!empty($selectedFilters)) {
+                    // Se há filtros específicos selecionados, usar apenas esses
+                    $query->where(function ($q) use ($selectedFilters, $dateStart, $dateEnd) {
+                        foreach ($selectedFilters as $index => $column) {
+                            if ($index === 0) {
+                                // Primeira condição usa where
+                                $q->whereBetween($column, [$dateStart, $dateEnd]);
+                            } else {
+                                // Demais condições usam orWhereBetween
+                                $q->orWhereBetween($column, [$dateStart, $dateEnd]);
+                            }
+                        }
+                    });
 
-            } else {
-                // Se não há filtros específicos selecionados, usar creation_date como padrão
-                $query->whereBetween('creation_date', [$dateStart, $dateEnd]);
+                    // Log dos filtros aplicados
+                    Log::info('Filtros específicos aplicados:', [
+                        'selected_filters' => $selectedFilters,
+                        'date_range' => [$dateStart, $dateEnd]
+                    ]);
+                } else {
+                    // Se não há filtros específicos selecionados, usar creation_date como padrão
+                    $query->whereBetween('creation_date', [$dateStart, $dateEnd]);
 
-                Log::info('Filtro padrão aplicado (creation_date):', [
-                    'date_range' => [$dateStart, $dateEnd],
-                    'reason' => 'Nenhum filtro específico selecionado'
-                ]);
-            }
-        }
-
-        // Executa a consulta
-        $loads = $query->orderByDesc('id')->get();
-
-        // Verificar quais cargas já foram cobradas
-        $this->markAlreadyChargedLoads($loads);
-
-        // Calcular total baseado no amount_type (se especificado)
-        $amountType = $request->input('amount_type', 'price');
-        if (in_array($amountType, ['price', 'paid_amount'])) {
-            $totalAmount = $loads->sum(function($load) use ($amountType) {
-                return (float) ($load->{$amountType} ?? 0);
-            });
-        } else {
-            // Fallback para price se amount_type inválido
-            $totalAmount = $loads->sum(function($load) {
-                return (float) ($load->price ?? 0);
-            });
-        }
-    }
-
-    // ⭐ DEBUG MELHORADO - Informações mais detalhadas
-    if ($hasFilters) {
-        $appliedFilters = [];
-        if ($request->has('filters') && is_array($request->filters)) {
-            foreach ($request->filters as $column => $value) {
-                if ($value === "1") {
-                    $appliedFilters[] = $column;
+                    Log::info('Filtro padrão aplicado (creation_date):', [
+                        'date_range' => [$dateStart, $dateEnd],
+                        'reason' => 'Nenhum filtro específico selecionado'
+                    ]);
                 }
             }
+
+            // Executa a consulta
+            $loads = $query->orderByDesc('id')->get();
+
+            // Verificar quais cargas já foram cobradas
+            $this->markAlreadyChargedLoads($loads);
+
+            // Calcular total baseado no amount_type (se especificado)
+            $amountType = $request->input('amount_type', 'price');
+            if (in_array($amountType, ['price', 'paid_amount'])) {
+                $totalAmount = $loads->sum(function ($load) use ($amountType) {
+                    return (float) ($load->{$amountType} ?? 0);
+                });
+            } else {
+                // Fallback para price se amount_type inválido
+                $totalAmount = $loads->sum(function ($load) {
+                    return (float) ($load->price ?? 0);
+                });
+            }
         }
 
-        Log::info('Filtros aplicados na consulta:', [
-            'carrier_id' => $request->carrier_id,
-            'carrier_scope' => $request->carrier_id === 'all' ? 'ALL CARRIERS' : 'SPECIFIC CARRIER',
-            'date_start' => $request->date_start,
-            'date_end' => $request->date_end,
-            'amount_type' => $request->amount_type,
-            'applied_filters' => $appliedFilters,
-            'loads_count' => $loads->count(),
-            'total_amount' => $totalAmount,
-            'sql_query' => isset($query) ? $query->toSql() : 'N/A',
-            'sql_bindings' => isset($query) ? $query->getBindings() : []
-        ]);
-    }
+        // ⭐ DEBUG MELHORADO - Informações mais detalhadas
+        if ($hasFilters) {
+            $appliedFilters = [];
+            if ($request->has('filters') && is_array($request->filters)) {
+                foreach ($request->filters as $column => $value) {
+                    if ($value === "1") {
+                        $appliedFilters[] = $column;
+                    }
+                }
+            }
 
-    // Retorna a view com os dados
-    return view('invoice.time_line_charge.create', compact(
-        'carriers',
-        'dispatchers',
-        'loads',
-        'totalAmount'
-    ));
-}
+            Log::info('Filtros aplicados na consulta:', [
+                'carrier_id' => $request->carrier_id,
+                'carrier_scope' => $request->carrier_id === 'all' ? 'ALL CARRIERS' : 'SPECIFIC CARRIER',
+                'date_start' => $request->date_start,
+                'date_end' => $request->date_end,
+                'amount_type' => $request->amount_type,
+                'applied_filters' => $appliedFilters,
+                'loads_count' => $loads->count(),
+                'total_amount' => $totalAmount,
+                'sql_query' => isset($query) ? $query->toSql() : 'N/A',
+                'sql_bindings' => isset($query) ? $query->getBindings() : []
+            ]);
+        }
+
+        // Retorna a view com os dados
+        return view('invoice.time_line_charge.create', compact(
+            'carriers',
+            'dispatchers',
+            'loads',
+            'totalAmount'
+        ));
+    }
 
 
     /**
@@ -367,7 +366,7 @@ class TimeLineChargeController extends Controller
         } else {
             // Criar coleção com o dispatcher encontrado
             $dispatchers = collect([$dispatcher]);
-            
+
             // Filtra os carriers pelo dispatcher_id
             $carriers = Carrier::with('user')
                 ->where('dispatcher_id', $dispatcher->id)
@@ -403,9 +402,9 @@ class TimeLineChargeController extends Controller
         }
 
         $loads = $query
-        ->with(['employee.dispatcher.user']) // Employee se relaciona com User através do Dispatcher
-        ->select('load_id', 'employee_id', $amountType)
-        ->get();
+            ->with(['employee.dispatcher.user']) // Employee se relaciona com User através do Dispatcher
+            ->select('load_id', 'employee_id', $amountType)
+            ->get();
 
         // Calcula total do valor
         $totalAmount = $loads->sum($amountType);
@@ -413,7 +412,7 @@ class TimeLineChargeController extends Controller
         // Obtém as comissões dos funcionários
         $employeeIds = $loads->pluck('employee_id')->filter()->unique()->values();
         $comissions = Comission::whereIn('employee_id', $employeeIds)
-                        ->pluck('value', 'employee_id'); // Ex: [5 => 10, 3 => 5]
+            ->pluck('value', 'employee_id'); // Ex: [5 => 10, 3 => 5]
 
         // Enriquecer os dados com a comissão calculada
         $loadsWithComission = $loads->map(function ($load) use ($amountType, $comissions) {
@@ -470,7 +469,7 @@ class TimeLineChargeController extends Controller
         } else {
             // Criar coleção com o dispatcher encontrado
             $dispatchers = collect([$dispatcher]);
-            
+
             // Filtra os carriers pelo dispatcher_id
             $carriers = Carrier::with('user')
                 ->where('dispatcher_id', $dispatcher->id)
@@ -505,8 +504,8 @@ class TimeLineChargeController extends Controller
 
         // Busca o valor do percentual no deals
         $dealPercent = Deal::where('carrier_id', $charge->carrier_id)
-                           ->where('dispatcher_id', $charge->dispatcher_id)
-                           ->value('value');
+            ->where('dispatcher_id', $charge->dispatcher_id)
+            ->value('value');
 
         // Calcula o valor da comissão
         $dealAmount = 0;
@@ -560,82 +559,82 @@ class TimeLineChargeController extends Controller
 
 
     public function checkDuplicateLoads(Request $request)
-{
-    $loadIds = $request->input('load_ids', []);
+    {
+        $loadIds = $request->input('load_ids', []);
 
-    if (empty($loadIds)) {
-        return response()->json(['duplicates' => []]);
+        if (empty($loadIds)) {
+            return response()->json(['duplicates' => []]);
+        }
+
+        // Buscar todas as time_line_charges existentes
+        $existingCharges = TimeLineCharge::all();
+        $duplicates = [];
+
+        foreach ($existingCharges as $charge) {
+            $chargeLoadIds = is_string($charge->load_ids)
+                ? json_decode($charge->load_ids, true)
+                : $charge->load_ids;
+
+            if (!is_array($chargeLoadIds)) continue;
+
+            // Verificar interseção entre as cargas
+            $commonLoads = array_intersect($loadIds, $chargeLoadIds);
+
+            if (!empty($commonLoads)) {
+                foreach ($commonLoads as $loadId) {
+                    $duplicates[] = [
+                        'load_id' => $loadId,
+                        'invoice_id' => $charge->invoice_id,
+                        'invoice_internal_id' => $charge->id,
+                        'charge_date' => $charge->created_at->format('d/m/Y'),
+                        'amount' => $charge->price,
+                        'carrier' => $charge->carrier->company_name ?? 'Unknown',
+                    ];
+                }
+            }
+        }
+
+        return response()->json(['duplicates' => $duplicates]);
     }
 
-    // Buscar todas as time_line_charges existentes
-    $existingCharges = TimeLineCharge::all();
-    $duplicates = [];
+    private function markAlreadyChargedLoads($loads)
+    {
+        $loadIds = $loads->pluck('load_id')->toArray();
 
-    foreach ($existingCharges as $charge) {
-        $chargeLoadIds = is_string($charge->load_ids)
-            ? json_decode($charge->load_ids, true)
-            : $charge->load_ids;
+        // Buscar todas as time_line_charges
+        $existingCharges = TimeLineCharge::all();
+        $chargedLoads = [];
 
-        if (!is_array($chargeLoadIds)) continue;
+        foreach ($existingCharges as $charge) {
+            $chargeLoadIds = is_string($charge->load_ids)
+                ? json_decode($charge->load_ids, true)
+                : $charge->load_ids;
 
-        // Verificar interseção entre as cargas
-        $commonLoads = array_intersect($loadIds, $chargeLoadIds);
+            if (!is_array($chargeLoadIds)) continue;
 
-        if (!empty($commonLoads)) {
-            foreach ($commonLoads as $loadId) {
-                $duplicates[] = [
-                    'load_id' => $loadId,
-                    'invoice_id' => $charge->invoice_id,
-                    'invoice_internal_id' => $charge->id,
-                    'charge_date' => $charge->created_at->format('d/m/Y'),
-                    'amount' => $charge->price,
-                    'carrier' => $charge->carrier->company_name ?? 'Unknown',
-                ];
+            foreach ($chargeLoadIds as $chargeLoadId) {
+                if (in_array($chargeLoadId, $loadIds)) {
+                    $chargedLoads[$chargeLoadId] = [
+                        'invoice_id' => $charge->invoice_id,
+                        'internal_id' => $charge->id,
+                        'charge_date' => $charge->created_at->format('d/m/Y'),
+                        'amount' => $charge->price
+                    ];
+                }
+            }
+        }
+
+        // Adicionar informação de cobrança às cargas
+        foreach ($loads as $load) {
+            if (isset($chargedLoads[$load->load_id])) {
+                $load->already_charged = true;
+                $load->charge_info = $chargedLoads[$load->load_id];
+            } else {
+                $load->already_charged = false;
+                $load->charge_info = null;
             }
         }
     }
-
-    return response()->json(['duplicates' => $duplicates]);
-}
-
-private function markAlreadyChargedLoads($loads)
-{
-    $loadIds = $loads->pluck('load_id')->toArray();
-
-    // Buscar todas as time_line_charges
-    $existingCharges = TimeLineCharge::all();
-    $chargedLoads = [];
-
-    foreach ($existingCharges as $charge) {
-        $chargeLoadIds = is_string($charge->load_ids)
-            ? json_decode($charge->load_ids, true)
-            : $charge->load_ids;
-
-        if (!is_array($chargeLoadIds)) continue;
-
-        foreach ($chargeLoadIds as $chargeLoadId) {
-            if (in_array($chargeLoadId, $loadIds)) {
-                $chargedLoads[$chargeLoadId] = [
-                    'invoice_id' => $charge->invoice_id,
-                    'internal_id' => $charge->id,
-                    'charge_date' => $charge->created_at->format('d/m/Y'),
-                    'amount' => $charge->price
-                ];
-            }
-        }
-    }
-
-    // Adicionar informação de cobrança às cargas
-    foreach ($loads as $load) {
-        if (isset($chargedLoads[$load->load_id])) {
-            $load->already_charged = true;
-            $load->charge_info = $chargedLoads[$load->load_id];
-        } else {
-            $load->already_charged = false;
-            $load->charge_info = null;
-        }
-    }
-}
 
 
     public function update(Request $request, $id): JsonResponse
@@ -683,8 +682,8 @@ private function markAlreadyChargedLoads($loads)
 
         // Buscar os loads
         $loads = Load::whereIn('load_id', $loadIds)
-                    ->select('load_id', 'employee_id', $amountType)
-                    ->get();
+            ->select('load_id', 'employee_id', $amountType)
+            ->get();
 
         // Total
         $totalAmount = $loads->sum($amountType);
@@ -692,7 +691,7 @@ private function markAlreadyChargedLoads($loads)
         // Buscar comissões
         $employeeIds = $loads->pluck('employee_id')->filter()->unique()->values();
         $comissions = Comission::whereIn('employee_id', $employeeIds)
-                        ->pluck('value', 'employee_id'); // ex: [5 => 10, 3 => 5]
+            ->pluck('value', 'employee_id'); // ex: [5 => 10, 3 => 5]
 
         // Enriquecer cada carga
         $loadsWithComission = $loads->map(function ($load) use ($amountType, $comissions) {
@@ -703,7 +702,7 @@ private function markAlreadyChargedLoads($loads)
             return [
                 'load_id' => $load->load_id,
                 'employee_id' => $load->employee_id,
-                 $amountType => $amountValue,
+                $amountType => $amountValue,
                 'comission_value' => $comissionPercent,
                 'amount_comission' => round($amountComission, 2),
             ];
@@ -773,39 +772,34 @@ private function markAlreadyChargedLoads($loads)
     }
 
     public function getChargeDetails($id)
-{
-    try {
-        $charge = TimeLineCharge::with(['carrier.user', 'dispatcher.user'])
-                                ->findOrFail($id);
+    {
+        try {
+            $charge = TimeLineCharge::with(['carrier.user', 'dispatcher.user'])
+                ->findOrFail($id);
 
-        // Decodificar load_ids se necessário
-        $loadIds = $charge->load_ids;
-        if (is_string($loadIds)) {
-            $loadIds = json_decode($loadIds, true);
+            // Decodificar load_ids se necessário
+            $loadIds = $charge->load_ids;
+            if (is_string($loadIds)) {
+                $loadIds = json_decode($loadIds, true);
+            }
+
+            return response()->json([
+                'id' => $charge->id,
+                'invoice_id' => $charge->invoice_id,
+                'price' => $charge->price,
+                'date_start' => $charge->date_start,
+                'date_end' => $charge->date_end,
+                'created_at' => $charge->created_at,
+                'carrier' => $charge->carrier,
+                'dispatcher' => $charge->dispatcher,
+                'load_ids' => $loadIds,
+                'payment_terms' => $charge->payment_terms,
+                'due_date' => $charge->due_date,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Charge not found or error loading details'
+            ], 404);
         }
-
-        return response()->json([
-            'id' => $charge->id,
-            'invoice_id' => $charge->invoice_id,
-            'price' => $charge->price,
-            'date_start' => $charge->date_start,
-            'date_end' => $charge->date_end,
-            'created_at' => $charge->created_at,
-            'carrier' => $charge->carrier,
-            'dispatcher' => $charge->dispatcher,
-            'load_ids' => $loadIds,
-            'payment_terms' => $charge->payment_terms,
-            'due_date' => $charge->due_date,
-        ]);
-
-    } catch (\Exception $e) {
-        return response()->json([
-            'error' => 'Charge not found or error loading details'
-        ], 404);
     }
-}
-
-
-
-
 }
